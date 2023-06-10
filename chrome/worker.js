@@ -1,3 +1,12 @@
+/*******************************************************************************
+
+ Artstation Plus — a browser extension
+ Copyright (C) 2023-present Demiurge Ash
+
+ Home: https://github.com/demiurge-ash/artstation-plus
+
+ ******************************************************************************/
+
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
     // Save File to folder
