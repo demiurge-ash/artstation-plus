@@ -3,7 +3,7 @@
  Artstation Plus — a browser extension
  Copyright (C) 2023-present Demiurge Ash
 
- Home: https://demiart.ru
+ Home: https://github.com/demiurge-ash/artstation-plus
 
  ******************************************************************************/
 
