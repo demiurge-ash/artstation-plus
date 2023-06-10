@@ -1,0 +1,64 @@
+.art-plus-icon {
+    transition: color .15s linear;
+    background-size: contain;
+    background-repeat: no-repeat;
+    fill: #bebec2;
+    color: #bebec2;
+    vertical-align: middle;
+}
+.art-plus-spin-fix {
+    display: inline-block;
+    margin-right: 0.5em;
+}
+.art-plus-pad-right {
+    display: inline-block;
+    margin-right: 0.4em;
+}
+.art-plus-icon-lg {
+    width: 1em;
+    height: 1em;
+}
+.art-plus-icon-md {
+    width: 0.8em;
+    height: 0.8em;
+}
+.art-plus-icon-sm {
+    width: 0.6em;
+    height: 0.6em;
+}
+.art-plus-crosshairs {
+    background-image: url('/icons/crosshairs.svg');
+}
+.art-plus-eye {
+    background-image: url('/icons/eye.svg');
+}
+.art-plus-thumbs-up {
+    background-image: url('/icons/thumbs-up.svg');
+}
+.art-plus-loading {
+    background-image: url('/icons/loading.svg');
+}
+.art-plus-close {
+    background-image: url('/icons/close.svg');
+}
+.art-plus-icon-spin {
+    animation: 3s linear 0s normal none infinite running spin;
+    -webkit-animation: 3s linear 0s normal none infinite running spin;
+}
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.art-plus-gallery-grid-icons {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    top: auto !important;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: #bebec2;
+    font-size: 1em;
+    cursor: pointer;
+    z-index: 2;
+}

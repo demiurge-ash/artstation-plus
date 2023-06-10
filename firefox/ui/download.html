@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <title>Artstation Plus — Download images</title>
+    <link rel="stylesheet" type="text/css" href="/css/styles.css">
+    <link rel="stylesheet" type="text/css" href="/ui/download.css">
+</head>
+
+<body>
+
+<div class="modal-header">
+    <button aria-label="Close" class="close" id="close" type="button"><div class="art-plus-icon art-plus-close art-plus-icon-lg"></div></button>
+    <h3 class="modal-title">Artstation Plus — Download images</h3>
+</div>
+
+<div class="modal-body">
+
+    <div id="search">
+        <div id="found-spin" class="art-plus-icon art-plus-loading art-plus-icon-lg art-plus-icon-spin art-plus-spin-fix"></div>
+        Searching for images...
+    </div>
+
+    <div id="found" class="none">
+        Found <span id="found-count">0</span> images.
+    </div>
+
+    <div id="found-nothing" class="none">
+        <i>Images not found!</i>
+    </div>
+
+    <div id="total" class="none">
+        Total size: <span id="total-count">0</span>.
+    </div>
+
+    <div id="download" class="none">
+        Download to folder «<span id="username" style="font-weight: bold;"></span>».
+    </div>
+
+    <div id="progress"></div>
+
+    <div id="done" class="none">
+        Well done! <a class="show-folder">Open Folder</a>
+    </div>
+
+</div>
+
+<script src="download.js"></script>
+</body>
+</html>

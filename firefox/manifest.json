@@ -1,0 +1,47 @@
+{
+  "name": "Artstation Plus",
+  "version": "2.0.0",
+  "description": "Adding new features to Artstation",
+  "manifest_version": 3,
+  "icons": {
+    "72": "icons/icon-72.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "activeTab",
+    "downloads",
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.artstation.com/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/crosshairs.svg",
+        "icons/eye.svg",
+        "icons/thumbs-up.svg",
+        "css/styles.css",
+        "ui/download.html",
+        "ui/download.js"
+      ],
+      "matches": ["*://*.artstation.com/*"]
+    }
+  ],
+  "background": {
+    "scripts": ["worker.js"],
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.artstation.com/*"],
+      "js": ["js/functions.js", "js/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{891eee3c-e8d2-43e6-aa3a-e53e272ccd60}"
+    }
+  }
+}
