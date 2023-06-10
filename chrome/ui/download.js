@@ -112,6 +112,8 @@ async function saveImages(item, fullname) {
                 .filter(asset => asset.asset_type === 'image');
 
             for (const asset of processedAssets) {
+                if (closeDialog) return;
+
                 let positionName;
                 if (iteration > 0) positionName = iteration;
                 iteration++;
