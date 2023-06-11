@@ -24,8 +24,6 @@ async function download(data) {
             stopSpin();
 
             let totalImages = images.length;
-            let totalSize = 0;
-
 
             if (totalImages > 0) {
 
@@ -41,11 +39,8 @@ async function download(data) {
                 const progressEl = document.getElementById('progress');
                 let completedCount = 0;
 
-                for (const image of images) {
-                    const totalCountEl = document.getElementById('total-count');
-                    totalSize += image.filesize;
-                    totalCountEl.textContent = nFormatter(totalSize).toString();
-                }
+                calculateTotalSize();
+
                 for (const image of images) {
                     if (closeDialog) return;
 
@@ -149,6 +144,15 @@ async function saveImages(item, fullname) {
     });
 }
 
+function calculateTotalSize() {
+    let totalSize = 0;
+    for (const image of images) {
+        const totalCountEl = document.getElementById('total-count');
+        totalSize += image.filesize;
+        totalCountEl.textContent = nFormatter(totalSize).toString();
+    }
+}
+
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -182,6 +186,7 @@ function getFileSize(url) {
             }
         })
         .catch(function(error) {
+            return 0;
             console.log(error);
         });
 }
