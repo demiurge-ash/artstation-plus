@@ -56,7 +56,6 @@ async function download(data) {
                     image.saveAs = false;
                     image.message = "downloadFile";
 
-                    //chrome.downloads.download(image);
                     await chrome.runtime.sendMessage(image);
 
                     completedCount++;
@@ -71,7 +70,6 @@ async function download(data) {
                         const showBtn = document.querySelector('.show-folder');
 
                         showBtn.onclick = function () {
-                            //chrome.downloads.showDefaultFolder();
                             chrome.runtime.sendMessage('openFolder');
                         }
                     }
@@ -209,9 +207,19 @@ function getJson(url) {
 function closeButton() {
     const showBtn = document.getElementById('close');
     showBtn.onclick = function() {
-        closeDialog = true;
-        window.parent.postMessage('closeModal', '*');
+        closeDialogEvent();
     }
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            closeDialogEvent();
+        }
+    });
+}
+
+function closeDialogEvent() {
+    closeDialog = true;
+    window.parent.postMessage('closeModal', '*');
 }
 
 function nFormatter(num) {

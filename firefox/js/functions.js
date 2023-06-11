@@ -128,6 +128,17 @@ function createDialog(url) {
 
     dialog.showModal();
 
+    // disable default Escape button
+    dialog.addEventListener('cancel', (event) => {
+        event.preventDefault();
+    });
+
+    iframe.onload = function() {
+        setTimeout(function() {
+            iframe.contentWindow.focus();
+        }, 100);
+    };
+
     return dialog;
 }
 
