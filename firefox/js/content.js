@@ -195,8 +195,13 @@ function init() {
                 container: ".visible-gallery .gallery",
                 item: ".project"
             }
-            download();
         }
+    }
+
+    // Profile
+    // artstation.com/{username}
+    if (document.querySelector('.navbar-artist-profile')) {
+        download();
     }
 
     //  Trending, Following & Latest Galleries
