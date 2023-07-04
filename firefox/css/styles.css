@@ -35,6 +35,9 @@
 .art-plus-thumbs-up {
     background-image: url('/icons/thumbs-up.svg');
 }
+.art-plus-trend {
+    background-image: url('/icons/trend.svg');
+}
 .art-plus-loading {
     background-image: url('/icons/loading.svg');
 }

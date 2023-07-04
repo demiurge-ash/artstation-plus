@@ -16,6 +16,7 @@ let path;
 let pathQuery;
 let handleID;
 let handleStatus = false;
+let trend = [];
 
 injectsCSS();
 init();
@@ -58,8 +59,18 @@ function InfoBlockArtwork(data, div) {
     metaBlock.classList.add('d-flex', 'align-items-center', artBlock);
     div.appendChild(metaBlock);
 
-    let proportionCountEl = createProportionCount(ratioEl, 'lg');
+    let proportionCountEl = createIconElement(ratioEl, 'crosshairs', 'lg');
     metaBlock.appendChild(proportionCountEl);
+
+    if (data.id in trend) {
+        let metaBlockTrend = document.createElement('div');
+        metaBlockTrend.classList.add('d-flex', 'align-items-center', artBlock);
+        div.appendChild(metaBlockTrend);
+
+        const trendNode = createTrendEl(trend[data.id]);
+        const trendEl = createIconElement(trendNode, 'trend', 'lg');
+        metaBlockTrend.appendChild(trendEl);
+    }
 }
 
 function InfoBlockMain(data, div) {
@@ -73,6 +84,10 @@ function InfoBlockMain(data, div) {
     createGalleryIcon(ul, 'eye', kFormatter(viewsCount));
     createGalleryIcon(ul, 'thumbs-up', kFormatter(likesCount));
     createGalleryIcon(ul, 'crosshairs', ratioEl);
+    if (data.id in trend) {
+        const trendNode = createTrendEl(trend[data.id]);
+        createGalleryIcon(ul, 'trend', trendNode);
+    }
     anchorDiv.appendChild(ul);
 }
 
@@ -112,8 +127,14 @@ function InfoBlockMyProject(data, div) {
     const metaBlock = div.querySelector('.project-meta');
     metaBlock.classList.add(artBlock);
 
-    const proportionCountEl = createProportionCount(ratioEl);
+    const proportionCountEl = createIconElement(ratioEl, 'crosshairs');
     metaBlock.appendChild(proportionCountEl);
+
+    if (data.id in trend) {
+        const trendNode = createTrendEl(trend[data.id]);
+        const trendEl = createIconElement(trendNode, 'trend');
+        metaBlock.appendChild(trendEl);
+    }
 
     //short publish label:
     //"Publish" to "Publ" & "Not Published" to "Not"
@@ -234,6 +255,12 @@ function init() {
             item: ".project-meta"
         }
     }
+
+    loadTrendingPages()
+        .then(function(result) {})
+        .catch(function(error) {
+            console.error(error);
+        });
 
     if (info) handleID = setInterval(handle, 1000, info);
 }

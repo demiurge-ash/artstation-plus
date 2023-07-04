@@ -64,11 +64,11 @@ function createSortSelectEl() {
     return select;
 }
 
-function createProportionCount(ratioEl, size) {
+function createIconElement(count, icon, size) {
     let proportionCountEl = document.createElement('div');
     proportionCountEl.classList.add('project-meta-item', artBlock);
 
-    let ratioIcon = createFaIcon('crosshairs', size);
+    let ratioIcon = createFaIcon(icon, size);
     proportionCountEl.appendChild(ratioIcon);
 
     let ratioSpan = document.createElement('span');
@@ -78,7 +78,7 @@ function createProportionCount(ratioEl, size) {
     proportionCountEl.appendChild(ratioSpan);
 
     let ratioArtExt = proportionCountEl.querySelector('.ratio-art-ext');
-    ratioArtExt.appendChild(ratioEl);
+    ratioArtExt.appendChild(count);
 
     return proportionCountEl;
 }
@@ -153,6 +153,13 @@ function createDialogIframe() {
     iframe.style.display = 'block';
 
     return iframe;
+}
+
+function createTrendEl(trend) {
+    const trendEl = document.createElement('span');
+    trendEl.style.color = "#6cfffd";
+    trendEl.textContent = trend;
+    return trendEl;
 }
 
 // -----------------------------------------------------------------------------------------
@@ -268,6 +275,39 @@ function injectsCSS() {
     link.rel = 'stylesheet';
     link.href = chrome.runtime.getURL('/css/styles.css');
     document.head.appendChild(link);
+}
+
+function loadTrendingPages() {
+    const promises = [];
+    const pages = 3;
+    const perPage = 100;
+
+    for (let i = 1; i <= pages; i++) {
+        const promise = getJson(website + 'api/v2/community/explore/projects/trending.json?dimension=all&per_page=' + perPage + '&page=' + i)
+            .then(function(page) {
+                const pageData = page.data;
+                let place = 1;
+                const itemPromises = pageData.map(function(item) {
+                    trend[item.id] = place + (perPage * i) - perPage;
+                    place++;
+                });
+                return Promise.all(itemPromises);
+            });
+        promises.push(promise);
+    }
+
+    return Promise.all(promises);
+}
+
+
+function getJson(url) {
+    return fetch(url, {})
+        .then(function(response) {
+            return response.json();
+        })
+        .then(function(data) {
+            return data;
+        });
 }
 
 // -----------------------------------------------------------------------------------------

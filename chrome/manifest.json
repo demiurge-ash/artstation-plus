@@ -1,6 +1,6 @@
 {
   "name": "Artstation Plus",
-  "version": "2.0.2",
+  "version": "3.0.0",
   "description": "Adding new features to Artstation",
   "manifest_version": 3,
   "icons": {
@@ -21,6 +21,7 @@
         "icons/crosshairs.svg",
         "icons/eye.svg",
         "icons/thumbs-up.svg",
+        "icons/trend.svg",
         "css/styles.css",
         "ui/download.html",
         "ui/download.js"
