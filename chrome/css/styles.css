@@ -65,3 +65,6 @@
     cursor: pointer;
     z-index: 2;
 }
+.gallery-container .gallery .icons-list {
+    z-index: 2;
+}
