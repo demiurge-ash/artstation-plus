@@ -16,16 +16,13 @@ function createGalleryIcon(ul, icon, count) {
 }
 
 function createGalleryUl(div) {
-    const oldUlClasses = div.querySelector('ul').classList;
     const ul = document.createElement('ul');
-    ul.classList.add(...oldUlClasses);
-    ul.classList.add(artBlock, 'art-plus-gallery-grid-icons');
+    ul.classList.add('art-plus-icons-list', artBlock, 'art-plus-gallery-grid-icons');
     return ul;
 }
 
 function createGalleryLi() {
     const li = document.createElement('li');
-    li.classList.add('gallery-grid-icons-item', 'ng-star-inserted');
     return li;
 }
 
