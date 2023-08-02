@@ -1,11 +1,15 @@
 {
   "name": "Artstation Plus",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "description": "Adding new features to Artstation",
   "manifest_version": 3,
   "icons": {
     "72": "icons/icon-72.png",
     "128": "icons/icon-128.png"
+  },
+  "options_ui": {
+    "page": "ui/options.html",
+    "open_in_tab": false
   },
   "permissions": [
     "activeTab",

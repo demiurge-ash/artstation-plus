@@ -87,3 +87,43 @@
     font-size: 14px;
     background-color: rgba(24,24,28,.8);
 }
+.legacy-design .gallery-container .gallery .project > a.project-image:not(:hover) .overlay,
+.legacy-design .gallery-container .gallery .project > a.project-image:not(:hover) .icons-list,
+.legacy-design a.gallery-grid-link:not(:hover) .gallery-grid-icons,
+.legacy-design a.gallery-grid-link:not(:hover) .gallery-grid-overlay {
+    opacity: 0;
+    background: transparent;
+    -webkit-transition: none;
+    transition: none;
+    -webkit-animation: unset;
+    animation: unset;
+}
+.legacy-design .gallery-container .gallery .project > a.project-image:hover .overlay,
+.legacy-design .gallery-container .gallery .project > a.project-image:hover .icons-list,
+.legacy-design a.gallery-grid-link:hover .gallery-grid-icons,
+.legacy-design a.gallery-grid-link:hover .gallery-grid-overlay {
+    opacity: 1;
+    background: linear-gradient(179.28deg, transparent 16.08%, rgba(0, 0, 0, 0.8) 99.14%);
+    -webkit-transition: none;
+    transition: none;
+    -webkit-animation: unset;
+    animation: unset;
+    -webkit-transform: unset;
+    transform: unset;
+}
+.legacy-design .gallery-container .gallery .project > a.project-image:hover .icons-list,
+.legacy-design a.gallery-grid-link:hover .gallery-grid-icons {
+    background: transparent;
+}
+.legacy-design .gallery-container .gallery .project > a.project-image:hover .overlay .info,
+.legacy-design .gallery-container .gallery .project > a.project-image:not(:hover) .overlay .info {
+    -webkit-transition: none;
+    transition: none;
+    -webkit-transform: unset;
+    transform: unset;
+}
+.legacy-design .gallery-container .gallery .project > a.project-image:hover .icons-list li {
+    opacity: 1;
+    -webkit-transition: none;
+    transition: none;
+}

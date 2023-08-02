@@ -17,6 +17,9 @@ let pathQuery;
 let handleID;
 let handleStatus = false;
 let trend = [];
+let options = {
+    legacyDesign: true
+};
 
 injectsCSS();
 init();
@@ -163,6 +166,31 @@ function createInfoBlock(data, div, name) {
     }
 }
 
+function switchToLegacyDesign(div, info) {
+    if (options['legacyDesign'] === true) {
+        if (info.legacyDesignPreview) {
+            const overlay = div.querySelector(info.legacyDesignPreview);
+            const overlayStub = 'art-plus-overlay';
+            if (overlay && !overlay.classList.contains(overlayStub)) {
+                // remove events and triggers
+                overlay.classList.add(overlayStub);
+                overlay.removeAttribute('style');
+                const clonedOverlay = overlay.cloneNode(true);
+                overlay.parentNode.replaceChild(clonedOverlay, overlay);
+
+                const icons = div.querySelector(info.legacyDesignIcon);
+                const overlayStubIcons = 'art-plus-overlay-icons';
+                if (icons) {
+                    icons.classList.add(overlayStubIcons);
+                    icons.removeAttribute('style');
+                    const clonedOverlayIcons = icons.cloneNode(true);
+                    icons.parentNode.replaceChild(clonedOverlayIcons, icons);
+                }
+            }
+        }
+    }
+}
+
 function handle(info) {
     if (handleStatus) return;
     handleStatus = true;
@@ -171,6 +199,9 @@ function handle(info) {
     if (projectsList) {
         const divs = projectsList.querySelectorAll(info.item);
         divs.forEach((div) => {
+
+            switchToLegacyDesign(div, info);
+
             if (!div.querySelector('.' + artBlock)) {
                 const hash = getHash(div, info.name);
                 getProjectInfo(hash)
@@ -189,6 +220,13 @@ function handle(info) {
 function init() {
     let info = false;
     setPath();
+
+    getOption('legacyDesign').then((legacyDesign) => {
+        options['legacyDesign'] = legacyDesign;
+        if (legacyDesign) {
+            document.body.classList.add('legacy-design');
+        }
+    });
 
     //  Profile Gallery
     //  artstation.com/{username}
@@ -214,7 +252,9 @@ function init() {
             info = {
                 name: "profile",
                 container: ".visible-gallery .gallery",
-                item: ".project"
+                item: ".project",
+                legacyDesignPreview: ".overlay",
+                legacyDesignIcon: ".gallery-grid-icons"
             }
         }
     }
@@ -231,7 +271,9 @@ function init() {
         info = {
             name: "main",
             container: ".gallery-grid",
-            item: "projects-list-item"
+            item: "projects-list-item",
+            legacyDesignPreview: ".gallery-grid-overlay",
+            legacyDesignIcon: ".gallery-grid-icons"
         }
     }
 

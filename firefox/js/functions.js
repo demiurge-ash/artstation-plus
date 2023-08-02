@@ -307,6 +307,15 @@ function getJson(url) {
         });
 }
 
+function getOption(option) {
+    return new Promise((resolve) => {
+        chrome.storage.local.get(option, (data) => {
+            const setting = data[option] !== undefined ? data[option] : options[option];
+            resolve(setting);
+        });
+    });
+}
+
 // -----------------------------------------------------------------------------------------
 // Cache
 // -----------------------------------------------------------------------------------------
