@@ -206,7 +206,9 @@ function handle(info) {
                 const hash = getHash(div, info.name);
                 getProjectInfo(hash)
                     .then(data => {
-                        createInfoBlock(data, div, info.name);
+                        if (data !== 'undefined') {
+                            createInfoBlock(data, div, info.name);
+                        }
                     }).catch(reason => {
                     console.log(reason);
                 });

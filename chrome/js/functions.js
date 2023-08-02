@@ -249,6 +249,8 @@ async function getProjectInfo(hash) {
         .then(response => response.json())
         .then(data => {
             return data;
+        }).catch(reason => {
+            console.log(reason);
         });
     cache.set(hash, response);
     return response;
