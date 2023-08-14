@@ -15,7 +15,7 @@ function createGalleryIcon(ul, icon, count) {
     }
 }
 
-function createGalleryUl(div) {
+function createGalleryUl() {
     const ul = document.createElement('ul');
     ul.classList.add('art-plus-icons-list', artBlock, 'art-plus-gallery-grid-icons');
     return ul;
@@ -63,7 +63,7 @@ function createSortSelectEl() {
 
 function createIconElement(count, icon, size) {
     let proportionCountEl = document.createElement('div');
-    proportionCountEl.classList.add('project-meta-item', artBlock);
+    proportionCountEl.classList.add('project-meta-item', artBlock, 'art-plus-label-'+icon);
 
     let ratioIcon = createFaIcon(icon, size);
     proportionCountEl.appendChild(ratioIcon);
@@ -78,6 +78,13 @@ function createIconElement(count, icon, size) {
     ratioArtExt.appendChild(count);
 
     return proportionCountEl;
+}
+
+function insertIcon(block, element, icon, size) {
+    const iconElement = createIconElement(element, icon, size);
+    if (!block.querySelector('.art-plus-label-'+icon)) {
+        block.appendChild(iconElement);
+    }
 }
 
 function createDownloadButton() {

@@ -59,20 +59,20 @@ function InfoBlockArtwork(data, div) {
     const ratioEl = rateColor(ratioCount);
 
     let metaBlock = document.createElement('div');
-    metaBlock.classList.add('d-flex', 'align-items-center', artBlock);
-    div.appendChild(metaBlock);
-
-    let proportionCountEl = createIconElement(ratioEl, 'crosshairs', 'lg');
-    metaBlock.appendChild(proportionCountEl);
+    metaBlock.classList.add('d-flex', 'align-items-center', artBlock, 'art-plus-label-crosshairs');
+    if (!div.querySelector('.art-plus-label-crosshairs')) {
+        div.appendChild(metaBlock);
+        insertIcon(metaBlock, ratioEl, 'crosshairs', 'lg');
+    }
 
     if (data.id in trend) {
         let metaBlockTrend = document.createElement('div');
-        metaBlockTrend.classList.add('d-flex', 'align-items-center', artBlock);
-        div.appendChild(metaBlockTrend);
-
-        const trendNode = createTrendEl(trend[data.id]);
-        const trendEl = createIconElement(trendNode, 'trend', 'lg');
-        metaBlockTrend.appendChild(trendEl);
+        metaBlockTrend.classList.add('d-flex', 'align-items-center', artBlock, 'art-plus-label-trend');
+        if (!div.querySelector('.art-plus-label-trend')) {
+            div.appendChild(metaBlockTrend);
+            const trendNode = createTrendEl(trend[data.id]);
+            insertIcon(metaBlockTrend, trendNode, 'trend', 'lg');
+        }
     }
 }
 
@@ -130,13 +130,11 @@ function InfoBlockMyProject(data, div) {
     const metaBlock = div.querySelector('.project-meta');
     metaBlock.classList.add(artBlock);
 
-    const proportionCountEl = createIconElement(ratioEl, 'crosshairs');
-    metaBlock.appendChild(proportionCountEl);
+    insertIcon(metaBlock, ratioEl, 'crosshairs');
 
     if (data.id in trend) {
         const trendNode = createTrendEl(trend[data.id]);
-        const trendEl = createIconElement(trendNode, 'trend');
-        metaBlock.appendChild(trendEl);
+        insertIcon(metaBlock, trendNode, 'trend');
     }
 
     //short publish label:
