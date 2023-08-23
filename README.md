@@ -11,6 +11,7 @@ This dropdown list allows you to sort your portfolio by date, views, likes, and 
 - «Download all images» button on each user profiles
 - Add to preview info about the place in the trends
 - Legacy Preview design — disable slow animation of title on previews. You can switch to modern design in the extension settings.
+- General Statistics of Views and Likes
 
 ## Chromium
 **[Download extension in Chrome Web Store](https://chrome.google.com/webstore/detail/artstation-plus/ebdenohdcbolldkofcepdbjdibghkndc)**
