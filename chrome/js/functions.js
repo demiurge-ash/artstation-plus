@@ -325,6 +325,24 @@ function getOption(option) {
     });
 }
 
+function addSpacesToNumber(number) {
+    return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+function formatKeyToDate(key) {
+    const year = parseInt(key.slice(0, 4));
+    const month = parseInt(key.slice(4, 6)) - 1; // Months in JavaScript are numbered from 0
+    const day = parseInt(key.slice(6, 8));
+
+    const date = new Date(year, month, day);
+    const formattedDate = date.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric"
+    });
+
+    return formattedDate;
+}
+
 // -----------------------------------------------------------------------------------------
 // Cache
 // -----------------------------------------------------------------------------------------

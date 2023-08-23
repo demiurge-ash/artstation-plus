@@ -16,10 +16,15 @@ let path;
 let pathQuery;
 let handleID;
 let handleStatus = false;
+let statsID;
+let projectsLoaded = false;
 let trend = [];
 let options = {
     legacyDesign: true
 };
+let statViews = 0;
+let statLikes = 0;
+let statsKey;
 
 injectsCSS();
 init();
@@ -94,6 +99,118 @@ function InfoBlockMain(data, div) {
     anchorDiv.appendChild(ul);
 }
 
+function createStatistics() {
+    const currentDate = new Date();
+    const year = currentDate.getFullYear();
+    const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
+    const day = currentDate.getDate().toString().padStart(2, '0');
+    statsKey = year + month + day;
+
+    const header = document.querySelector(".page-title");
+
+    const stats = document.createElement('div');
+    stats.classList.add('statistics');
+
+    const viewsEl = document.createElement('span');
+    viewsEl.classList.add('statistics-views-block', 'stat-block');
+    stats.appendChild(viewsEl);
+    const views = document.createElement('span');
+    views.classList.add('statistics-views');
+    views.textContent = "Stats loading...";
+    viewsEl.appendChild(views);
+
+    const likesEl = document.createElement('span');
+    likesEl.classList.add('statistics-likes-block', 'stat-block');
+    stats.appendChild(likesEl);
+    const likes = document.createElement('span');
+    likes.classList.add('statistics-likes');
+    likesEl.appendChild(likes);
+
+    header.appendChild(stats);
+
+    statsID = setInterval(showStatistics, 1000);
+}
+
+function showStatistics() {
+    if (!projectsLoaded) return;
+    if (statsID) clearInterval(statsID);
+
+    const views = document.querySelector(".statistics-views");
+    views.textContent = addSpacesToNumber(statViews) + ' views';
+
+    const likes = document.querySelector(".statistics-likes");
+    likes.textContent = addSpacesToNumber(statLikes) + ' likes';
+
+    chrome.storage.local.get('stats', function(result) {
+        const statsData = result.stats;
+
+        let previousKey = null;
+        let previousStats = null;
+        for (const key in statsData) {
+            if (parseInt(key) < statsKey) {
+                if (!previousKey || parseInt(key) > parseInt(previousKey)) {
+                    previousKey = key;
+                    previousStats = statsData[previousKey];
+                    const formattedDate = formatKeyToDate(previousKey);
+
+                    const diffViews = statViews - previousStats.views;
+                    if (diffViews > 0 && statViews > 0) {
+                        let diffViewsElement = document.querySelector(".statistics-diff-views");
+                        if (!diffViewsElement) {
+                            diffViewsElement = document.createElement('span');
+                            diffViewsElement.classList.add('statistics-diff-views', 'stat-diff');
+                            diffViewsElement.title = `since ${formattedDate}`;
+                        }
+                        diffViewsElement.textContent = '+' + addSpacesToNumber(diffViews);
+                        const viewsEl = document.querySelector(".statistics-views-block");
+                        viewsEl.appendChild(diffViewsElement);
+                    }
+
+                    const diffLikes = statLikes - previousStats.likes;
+                    if (diffLikes > 0 && statLikes > 0) {
+                        let diffLikesElement = document.querySelector(".statistics-diff-likes");
+                        if (!diffLikesElement) {
+                            diffLikesElement = document.createElement('span');
+                            diffLikesElement.classList.add('statistics-diff-likes', 'stat-diff');
+                            diffLikesElement.title = `since ${formattedDate}`;
+                        }
+                        diffLikesElement.textContent = '+' + addSpacesToNumber(diffLikes);
+                        const likesEl = document.querySelector(".statistics-likes-block");
+                        likesEl.appendChild(diffLikesElement);
+                    }
+
+                }
+            }
+        }
+
+        const cachedStats = {};
+        if (previousKey) {
+            cachedStats[previousKey] = previousStats;
+        }
+        cachedStats[statsKey] = {
+            views: statViews,
+            likes: statLikes
+        };
+
+        chrome.storage.local.set({
+            stats: cachedStats
+        });
+
+    });
+
+}
+
+function updateStatistics(data) {
+    const viewsInt = parseInt(data.views_count);
+    if (!isNaN(viewsInt) && viewsInt > 0) {
+        statViews += viewsInt;
+    }
+    const likesInt = parseInt(data.likes_count);
+    if (!isNaN(likesInt) && likesInt > 0) {
+        statLikes += likesInt;
+    }
+}
+
 function createSortSelect() {
     let selectSpan = createSelectSpan();
     let select = createSortSelectEl();
@@ -122,6 +239,8 @@ function createSortSelect() {
 }
 
 function InfoBlockMyProject(data, div) {
+    updateStatistics(data);
+
     const viewsCount = data.views_count;
     const likesCount = data.likes_count;
     const ratioCount = calculateRatio(viewsCount, likesCount);
@@ -196,25 +315,32 @@ function handle(info) {
     const projectsList = document.querySelector(info.container);
     if (projectsList) {
         const divs = projectsList.querySelectorAll(info.item);
+        let activeRequests = 0;
         divs.forEach((div) => {
 
             switchToLegacyDesign(div, info);
 
             if (!div.querySelector('.' + artBlock)) {
                 const hash = getHash(div, info.name);
+                activeRequests++;
                 getProjectInfo(hash)
                     .then(data => {
                         if (data !== 'undefined') {
                             createInfoBlock(data, div, info.name);
                         }
                     }).catch(reason => {
-                    console.log(reason);
+                        console.log(reason);
+                    }).finally(() => {
+                        activeRequests--;
+                        if (activeRequests === 0) {
+                            projectsLoaded = true;
+                            handleStatus = false;
+                        }
                 });
             }
         });
     }
 
-    handleStatus = false;
 }
 
 function init() {
@@ -286,6 +412,7 @@ function init() {
             item: ".project"
         }
         createSortSelect();
+        createStatistics();
     }
 
     //  Artwork page

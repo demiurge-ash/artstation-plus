@@ -127,3 +127,27 @@
     -webkit-transition: none;
     transition: none;
 }
+
+.statistics {
+    margin-left: 38px;
+    margin-right: 10px;
+    font-size: 12px;
+    min-width: 150px;
+    color: #bebec2;
+    display: inline-block;
+    vertical-align: top;
+}
+.stat-block {
+    margin-right: 10px;
+}
+.art-plus-dot {
+    background: #707074;
+    width: 5px;
+    height: 5px;
+    margin: 8px 7px 5px;
+    border-radius: 50%;
+}
+.stat-diff {
+    vertical-align: super;
+    font-size: 10px;
+}
