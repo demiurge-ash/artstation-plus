@@ -335,7 +335,7 @@ function formatKeyToDate(key) {
     const day = parseInt(key.slice(6, 8));
 
     const date = new Date(year, month, day);
-    const formattedDate = date.toLocaleDateString("en-US", {
+    const formattedDate = date.toLocaleDateString("en-GB", {
         month: "long",
         day: "numeric"
     });
