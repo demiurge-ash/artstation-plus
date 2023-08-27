@@ -334,13 +334,19 @@ function handle(info) {
                         activeRequests--;
                         if (activeRequests === 0) {
                             projectsLoaded = true;
-                            handleStatus = false;
+                            // TODO: Refactor to remove dependency on variable
+                            // disable update if data processing completed
+                            // and this is myprojects page
+                            if (info.name == "myprojects") handleStatus = false;
                         }
                 });
             }
         });
     }
-
+    // TODO: Refactor to remove dependency on variable
+    // disable update if data processing completed
+    // and this is not myprojects page
+    if (info.name !== "myprojects") handleStatus = false;
 }
 
 function init() {
