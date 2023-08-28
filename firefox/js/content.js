@@ -12,6 +12,7 @@ const artBlock = 'art-plus-icons';
 const downloadButton = 'art-plus-download-button';
 const website = 'https://www.artstation.com/';
 const websiteProjectUrl = website + 'projects/';
+let uniqueIds = [];
 let path;
 let pathQuery;
 let handleID;
@@ -201,13 +202,16 @@ function showStatistics() {
 }
 
 function updateStatistics(data) {
-    const viewsInt = parseInt(data.views_count);
-    if (!isNaN(viewsInt) && viewsInt > 0) {
-        statViews += viewsInt;
-    }
-    const likesInt = parseInt(data.likes_count);
-    if (!isNaN(likesInt) && likesInt > 0) {
-        statLikes += likesInt;
+    if (!uniqueIds[data.id]) {
+        uniqueIds[data.id] = true;
+        const viewsInt = parseInt(data.views_count);
+        if (!isNaN(viewsInt) && viewsInt > 0) {
+            statViews += viewsInt;
+        }
+        const likesInt = parseInt(data.likes_count);
+        if (!isNaN(likesInt) && likesInt > 0) {
+            statLikes += likesInt;
+        }
     }
 }
 
@@ -334,19 +338,12 @@ function handle(info) {
                         activeRequests--;
                         if (activeRequests === 0) {
                             projectsLoaded = true;
-                            // TODO: Refactor to remove dependency on variable
-                            // disable update if data processing completed
-                            // and this is myprojects page
-                            if (info.name == "myprojects") handleStatus = false;
                         }
                 });
             }
         });
     }
-    // TODO: Refactor to remove dependency on variable
-    // disable update if data processing completed
-    // and this is not myprojects page
-    if (info.name !== "myprojects") handleStatus = false;
+    handleStatus = false;
 }
 
 function init() {
