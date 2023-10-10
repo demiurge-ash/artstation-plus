@@ -91,17 +91,20 @@ function createDownloadButton() {
     let alreadyButton = document.querySelector('.'+downloadButton);
     if (alreadyButton) return alreadyButton;
 
-    const panel = document.querySelector('.action-buttons > ul');
-    let li = document.createElement('li');
+    const panel = document.querySelector('.user-buttons');
+    if (!panel) return false;
+
+    let li = document.createElement('div');
+    li.style.marginTop = '16px';
     let button = document.createElement('button');
-    button.classList.add('btn', 'btn-warning', 'btn-sm', downloadButton);
+    button.classList.add('btn', 'btn-warning', 'w-100', downloadButton);
     button.setAttribute('type', 'button');
     let icon = document.createElement('i');
     icon.classList.add('far', 'fa-download', 'fa-pad-right');
     button.appendChild(icon);
     button.appendChild(document.createTextNode('Download all images'));
     li.appendChild(button);
-    panel.appendChild(li);
+    panel.insertAdjacentElement('afterend', li);
 
     return button;
 }

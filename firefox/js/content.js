@@ -16,6 +16,7 @@ let uniqueIds = [];
 let path;
 let pathQuery;
 let handleID;
+let handleUnidentifiedPageID;
 let handleStatus = false;
 let statsID;
 let projectsLoaded = false;
@@ -33,6 +34,7 @@ setInterval(checkUrlChange, 1000);
 
 function download() {
     let button = createDownloadButton();
+    if (!button) return;
 
     button.addEventListener('click', () => {
         const button = document.querySelector('.' + downloadButton)
@@ -56,6 +58,37 @@ function download() {
             }
         });
     });
+}
+
+function userPage() {
+    if (handleID) return;
+
+    let userProjects = document.querySelectorAll('user-projects');
+    let visibleUserProject;
+    let userProjectsArray = Array.from(userProjects);
+
+    userProjectsArray.forEach((element) => {
+        let styles = window.getComputedStyle(element);
+
+        let display = styles.getPropertyValue("display");
+        let visibility = styles.getPropertyValue("visibility");
+
+        if (display !== "none" && visibility !== "hidden") {
+            visibleUserProject = element;
+        }
+    });
+
+    if (visibleUserProject) {
+        visibleUserProject.classList.add('visible-gallery');
+        info = {
+            name: "main",
+            container: ".gallery-grid",
+            item: "projects-list-item",
+            legacyDesignPreview: ".gallery-grid-overlay",
+            legacyDesignIcon: ".gallery-grid-icons"
+        }
+        handleID = setInterval(handle, 1000, info);
+    }
 }
 
 function InfoBlockArtwork(data, div) {
@@ -312,6 +345,11 @@ function switchToLegacyDesign(div, info) {
     }
 }
 
+function handleUnidentifiedPage() {
+    download();
+    userPage();
+}
+
 function handle(info) {
     if (handleStatus) return;
     handleStatus = true;
@@ -357,43 +395,6 @@ function init() {
         }
     });
 
-    //  Profile Gallery
-    //  artstation.com/{username}
-    if (document.querySelector('user-projects')) {
-
-        let userProjects = document.querySelectorAll('user-projects');
-        let visibleUserProject;
-        let userProjectsArray = Array.from(userProjects);
-
-        userProjectsArray.forEach((element) => {
-            let styles = window.getComputedStyle(element);
-
-            let display = styles.getPropertyValue("display");
-            let visibility = styles.getPropertyValue("visibility");
-
-            if (display !== "none" && visibility !== "hidden") {
-                visibleUserProject = element;
-            }
-        });
-
-        if (visibleUserProject) {
-            visibleUserProject.classList.add('visible-gallery');
-            info = {
-                name: "profile",
-                container: ".visible-gallery .gallery",
-                item: ".project",
-                legacyDesignPreview: ".overlay",
-                legacyDesignIcon: ".gallery-grid-icons"
-            }
-        }
-    }
-
-    // Profile
-    // artstation.com/{username}
-    if (document.querySelector('.navbar-artist-profile')) {
-        download();
-    }
-
     //  Trending, Following & Latest Galleries
     //  artstation.com/?sort_by={sort}
     if (pathQuery.startsWith("?sort_by=")) {
@@ -435,4 +436,5 @@ function init() {
         });
 
     if (info) handleID = setInterval(handle, 1000, info);
+    if (!info) handleUnidentifiedPageID = setInterval(handleUnidentifiedPage, 1000);
 }
