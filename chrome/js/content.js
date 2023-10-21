@@ -12,6 +12,7 @@ const artBlock = 'art-plus-icons';
 const downloadButton = 'art-plus-download-button';
 const website = 'https://www.artstation.com/';
 const websiteProjectUrl = website + 'projects/';
+const websiteUserUrl = website + 'users/';
 let uniqueIds = [];
 let path;
 let pathQuery;
@@ -26,6 +27,7 @@ let options = {
 };
 let statViews = 0;
 let statLikes = 0;
+let statFollowers = 0;
 let statsKey;
 
 injectsCSS();
@@ -160,9 +162,31 @@ function createStatistics() {
     likes.classList.add('statistics-likes');
     likesEl.appendChild(likes);
 
+    const followersEl = document.createElement('span');
+    followersEl.classList.add('statistics-followers-block', 'stat-block');
+    stats.appendChild(followersEl);
+    const followers = document.createElement('span');
+    followers.classList.add('statistics-followers');
+    followersEl.appendChild(followers);
+
     header.appendChild(stats);
 
+    loadUserInfo();
     statsID = setInterval(showStatistics, 1000);
+}
+
+function loadUserInfo() {
+    const username = getUsername();
+    if (!username) return;
+
+    getJson(websiteUserUrl + username + '.json')
+        .then(function (result) {
+            const followers = result.followers_count;
+            const followersEl = document.querySelector(".statistics-followers");
+            followersEl.textContent = addSpacesToNumber(followers) + ' followers';
+        }).catch(reason => {
+            console.log(reason);
+        });;
 }
 
 function showStatistics() {
@@ -213,6 +237,19 @@ function showStatistics() {
                         likesEl.appendChild(diffLikesElement);
                     }
 
+                    const diffFollowers = statFollowers - previousStats.followers;
+                    if (diffFollowers > 0 && statFollowers > 0) {
+                        let diffFollowersElement = document.querySelector(".statistics-diff-followers");
+                        if (!diffFollowersElement) {
+                            diffFollowersElement = document.createElement('span');
+                            diffFollowersElement.classList.add('statistics-diff-followers', 'stat-diff');
+                            diffFollowersElement.title = `since ${formattedDate}`;
+                        }
+                        diffFollowersElement.textContent = '+' + addSpacesToNumber(diffFollowers);
+                        const followersEl = document.querySelector(".statistics-followers-block");
+                        followersEl.appendChild(diffFollowersElement);
+                    }
+
                 }
             }
         }
@@ -223,7 +260,8 @@ function showStatistics() {
         }
         cachedStats[statsKey] = {
             views: statViews,
-            likes: statLikes
+            likes: statLikes,
+            followers: statFollowers
         };
 
         chrome.storage.local.set({

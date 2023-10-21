@@ -346,6 +346,22 @@ function formatKeyToDate(key) {
     return formattedDate;
 }
 
+function getUsername() {
+    let username = false;
+    let scriptElements = document.getElementsByTagName('script');
+    for (let i = 0; i < scriptElements.length; i++) {
+        let scriptContent = scriptElements[i].textContent;
+        if (scriptContent && scriptContent.includes('window.user_username =')) {
+            let match = scriptContent.match(/window\.user_username = "(.*?)"/);
+            if (match && match.length > 1) {
+                username = match[1];
+                break;
+            }
+        }
+    }
+    return username;
+}
+
 // -----------------------------------------------------------------------------------------
 // Cache
 // -----------------------------------------------------------------------------------------
