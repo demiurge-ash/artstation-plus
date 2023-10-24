@@ -182,6 +182,7 @@ function loadUserInfo() {
     getJson(websiteUserUrl + username + '.json')
         .then(function (result) {
             const followers = result.followers_count;
+            statFollowers = followers;
             const followersEl = document.querySelector(".statistics-followers");
             followersEl.textContent = addSpacesToNumber(followers) + ' followers';
         }).catch(reason => {
