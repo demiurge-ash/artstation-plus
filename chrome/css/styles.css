@@ -44,6 +44,9 @@
 .art-plus-close {
     background-image: url('/icons/close.svg');
 }
+.art-plus-download {
+    background-image: url('/icons/download.svg');
+}
 .art-plus-icon-spin {
     animation: 3s linear 0s normal none infinite running spin;
     -webkit-animation: 3s linear 0s normal none infinite running spin;
@@ -150,4 +153,8 @@
 .stat-diff {
     vertical-align: super;
     font-size: 10px;
+}
+
+.sidebar-collapsed .btn-download-text {
+    display: none;
 }

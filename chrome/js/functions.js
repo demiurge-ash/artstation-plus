@@ -99,10 +99,12 @@ function createDownloadButton() {
     let button = document.createElement('button');
     button.classList.add('btn', 'btn-warning', 'w-100', downloadButton);
     button.setAttribute('type', 'button');
-    let icon = document.createElement('i');
-    icon.classList.add('far', 'fa-download', 'fa-pad-right');
+    let icon = createFaIcon('download', 'lg');
     button.appendChild(icon);
-    button.appendChild(document.createTextNode('Download all images'));
+    let textBlock = document.createElement('span');
+    textBlock.appendChild(document.createTextNode('Download all images'));
+    textBlock.classList.add('btn-download-text');
+    button.appendChild(textBlock);
     li.appendChild(button);
     panel.insertAdjacentElement('afterend', li);
 
