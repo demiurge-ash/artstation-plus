@@ -28,6 +28,7 @@ let options = {
 let statViews = 0;
 let statLikes = 0;
 let statFollowers = 0;
+let statComments = 0;
 let statsKey;
 
 injectsCSS();
@@ -162,6 +163,13 @@ function createStatistics() {
     likes.classList.add('statistics-likes');
     likesEl.appendChild(likes);
 
+    const commentsEl = document.createElement('span');
+    commentsEl.classList.add('statistics-comments-block', 'stat-block');
+    stats.appendChild(commentsEl);
+    const comments = document.createElement('span');
+    comments.classList.add('statistics-comments');
+    commentsEl.appendChild(comments);
+
     const followersEl = document.createElement('span');
     followersEl.classList.add('statistics-followers-block', 'stat-block');
     stats.appendChild(followersEl);
@@ -199,6 +207,9 @@ function showStatistics() {
 
     const likes = document.querySelector(".statistics-likes");
     likes.textContent = addSpacesToNumber(statLikes) + ' likes';
+
+    const comments = document.querySelector(".statistics-comments");
+    comments.textContent = addSpacesToNumber(statComments) + ' comments';
 
     chrome.storage.local.get('stats', function(result) {
         const statsData = result.stats;
@@ -251,6 +262,19 @@ function showStatistics() {
                         followersEl.appendChild(diffFollowersElement);
                     }
 
+                    const diffComments = statComments - previousStats.comments;
+                    if (diffComments > 0 && statComments > 0) {
+                        let diffCommentsElement = document.querySelector(".statistics-diff-comments");
+                        if (!diffCommentsElement) {
+                            diffCommentsElement = document.createElement('span');
+                            diffCommentsElement.classList.add('statistics-diff-comments', 'stat-diff');
+                            diffCommentsElement.title = `since ${formattedDate}`;
+                        }
+                        diffCommentsElement.textContent = '+' + addSpacesToNumber(diffComments);
+                        const commentsEl = document.querySelector(".statistics-comments-block");
+                        commentsEl.appendChild(diffCommentsElement);
+                    }
+
                 }
             }
         }
@@ -262,7 +286,8 @@ function showStatistics() {
         cachedStats[statsKey] = {
             views: statViews,
             likes: statLikes,
-            followers: statFollowers
+            followers: statFollowers,
+            comments: statComments
         };
 
         chrome.storage.local.set({
@@ -283,6 +308,10 @@ function updateStatistics(data) {
         const likesInt = parseInt(data.likes_count);
         if (!isNaN(likesInt) && likesInt > 0) {
             statLikes += likesInt;
+        }
+        const commentsInt = parseInt(data.comments_count);
+        if (!isNaN(commentsInt) && commentsInt > 0) {
+            statComments += commentsInt;
         }
     }
 }
