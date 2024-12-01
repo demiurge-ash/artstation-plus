@@ -466,7 +466,7 @@ function init() {
 
     //  Trending, Following & Latest Galleries
     //  artstation.com/?sort_by={sort}
-    if (pathQuery.startsWith("?sort_by=")) {
+    if (pathQuery.startsWith("?sort_by=") || !pathQuery) {
         info = {
             name: "main",
             container: ".gallery-grid",
