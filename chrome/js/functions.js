@@ -310,8 +310,36 @@ function loadTrendingPages() {
     return Promise.all(promises);
 }
 
+function createCachedJsonFetcher(cacheDuration = 3 * 60 * 1000) { // 3 minutes
+    return async function getJson(url) {
+        const cacheKey = `cached_json_${url}`;
+        const cachedData = cache.get(cacheKey);
 
-function getJson(url) {
+        if (cachedData && cachedData.timestamp && (Date.now() - cachedData.timestamp) < cacheDuration) {
+            return cachedData.data;
+        }
+
+        try {
+            const response = await fetch(url, {});
+            const data = await response.json();
+
+            cache.set(cacheKey, {
+                data: data,
+                timestamp: Date.now()
+            });
+
+            return data;
+
+        } catch (error) {
+            if (cachedData) {
+                return cachedData.data;
+            }
+            throw error;
+        }
+    };
+}
+
+/*function getJson(url) {
     return fetch(url, {})
         .then(function(response) {
             return response.json();
@@ -319,7 +347,7 @@ function getJson(url) {
         .then(function(data) {
             return data;
         });
-}
+}*/
 
 function getOption(option) {
     return new Promise((resolve) => {

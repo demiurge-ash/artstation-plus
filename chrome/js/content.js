@@ -8,6 +8,7 @@
  ******************************************************************************/
 
 const cache = new SessionCache();
+const getJson = createCachedJsonFetcher();
 const artBlock = 'art-plus-icons';
 const downloadButton = 'art-plus-download-button';
 const website = 'https://www.artstation.com/';
