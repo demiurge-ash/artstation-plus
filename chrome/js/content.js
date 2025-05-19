@@ -364,8 +364,9 @@ function InfoBlockMyProject(data, div) {
 
     //short publish label:
     //"Publish" to "Publ" & "Not Published" to "Not"
-    const label = div.querySelector('.label');
-    label.textContent = label.textContent.slice(0, 4).trim();
+    document.querySelectorAll('.project-status-label span').forEach(span => {
+        span.textContent = span.textContent.slice(0, 4);
+    });
 
     // add attributes to preview block
     div.setAttribute('data-ratio', ratioCount);
