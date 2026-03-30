@@ -101,20 +101,37 @@ function InfoBlockArtwork(data, div) {
     const ratioCount = calculateRatio(viewsCount, likesCount);
     const ratioEl = rateColor(ratioCount);
 
+    let wrapper = div.querySelector('.art-plus-wrapper');
+    if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.classList.add('d-flex', 'align-items-center', 'gap-2', 'art-plus-wrapper');
+        div.appendChild(wrapper);
+    }
+
     let metaBlock = document.createElement('div');
     metaBlock.classList.add('d-flex', 'align-items-center', artBlock, 'art-plus-label-crosshairs');
     if (!div.querySelector('.art-plus-label-crosshairs')) {
-        div.appendChild(metaBlock);
+        wrapper.appendChild(metaBlock);
         insertIcon(metaBlock, ratioEl, 'crosshairs', 'lg');
+
+        let label = document.createElement('span');
+        label.classList.add('art-plus-label-text');
+        label.textContent = ' Ratio';
+        metaBlock.appendChild(label);
     }
 
     if (data.id in trend) {
         let metaBlockTrend = document.createElement('div');
         metaBlockTrend.classList.add('d-flex', 'align-items-center', artBlock, 'art-plus-label-trend');
         if (!div.querySelector('.art-plus-label-trend')) {
-            div.appendChild(metaBlockTrend);
+            wrapper.appendChild(metaBlockTrend);
             const trendNode = createTrendEl(trend[data.id]);
             insertIcon(metaBlockTrend, trendNode, 'trend', 'lg');
+
+            let label = document.createElement('span');
+            label.classList.add('art-plus-label-text');
+            label.textContent = ' Rank';
+            metaBlockTrend.appendChild(label);
         }
     }
 }
@@ -361,12 +378,6 @@ function InfoBlockMyProject(data, div) {
         const trendNode = createTrendEl(trend[data.id]);
         insertIcon(metaBlock, trendNode, 'trend');
     }
-
-    //short publish label:
-    //"Publish" to "Publ" & "Not Published" to "Not"
-    document.querySelectorAll('.project-status-label span').forEach(span => {
-        span.textContent = span.textContent.slice(0, 4);
-    });
 
     // add attributes to preview block
     div.setAttribute('data-ratio', ratioCount);

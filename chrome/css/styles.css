@@ -6,6 +6,10 @@
     color: #bebec2;
     vertical-align: middle;
 }
+.art-plus-icons {
+    gap: 6px;
+    align-items: center;
+}
 .art-plus-spin-fix {
     display: inline-block;
     margin-right: 0.5em;
@@ -15,8 +19,8 @@
     margin-right: 0.4em;
 }
 .art-plus-icon-lg {
-    width: 1em;
-    height: 1em;
+    width: 1.2em;
+    height: 1.2em;
 }
 .art-plus-icon-md {
     width: 0.8em;
@@ -157,4 +161,26 @@
 
 .sidebar-collapsed .btn-download-text {
     display: none;
+}
+
+.project-meta {
+    flex-wrap: wrap;
+}
+
+.art-plus-wrapper {
+    flex-basis: 100%;
+    justify-content: space-around;
+    margin-top: 15px;
+}
+
+.project-list .project-status-meta {
+     align-items: stretch;
+    justify-content: space-between;
+    display: flex;
+    flex-direction: column;
+
+}
+
+.project-list .project-meta {
+    margin-top: 4px;
 }
