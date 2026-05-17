@@ -435,8 +435,8 @@ function handle(info) {
     if (handleStatus) return;
     handleStatus = true;
 
-    const projectsList = document.querySelector(info.container);
-    if (projectsList) {
+    const projectsLists = document.querySelectorAll(info.container);
+    projectsLists.forEach((projectsList) => {
         const divs = projectsList.querySelectorAll(info.item);
         let activeRequests = 0;
         divs.forEach((div) => {
@@ -461,7 +461,7 @@ function handle(info) {
                 });
             }
         });
-    }
+    });
     handleStatus = false;
 }
 
@@ -478,7 +478,7 @@ function init() {
 
     //  Trending, Following & Latest Galleries
     //  artstation.com/?sort_by={sort}
-    if (pathQuery.startsWith("?sort_by=") || path === '/') {
+    if (pathQuery.includes("sort_by=") || path === '/') {
         info = {
             name: "main",
             container: ".gallery-grid",
