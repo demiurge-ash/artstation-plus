@@ -18,8 +18,9 @@ async function download(data) {
             const per_page = 50;
             const totalCount = result.total_count;
             const pages = Math.ceil(totalCount / per_page);
+            const fullname = cleanName(data.fullname, data.username);
 
-            await loadAllPages(data, pages);
+            await loadAllPages(data, pages, fullname);
 
             stopSpin();
 
@@ -34,10 +35,11 @@ async function download(data) {
                 foundEl.classList.remove('none');
 
                 const folderEl = document.getElementById('username');
-                folderEl.textContent = data.fullname;
+                folderEl.textContent = fullname;
 
                 const progressEl = document.getElementById('progress');
                 let completedCount = 0;
+                let firstDownloadId;
 
                 calculateTotalSize();
 
@@ -51,7 +53,8 @@ async function download(data) {
                     image.saveAs = false;
                     image.message = "downloadFile";
 
-                    await chrome.runtime.sendMessage(image);
+                    const downloadId = await chrome.runtime.sendMessage(image);
+                    if (firstDownloadId === undefined) firstDownloadId = downloadId;
 
                     completedCount++;
                     const progress = (completedCount / totalImages) * 100;
@@ -65,7 +68,10 @@ async function download(data) {
                         const showBtn = document.querySelector('.show-folder');
 
                         showBtn.onclick = function () {
-                            chrome.runtime.sendMessage('openFolder');
+                            chrome.runtime.sendMessage({
+                                message: 'openFolder',
+                                downloadId: firstDownloadId
+                            });
                         }
                     }
                 }
@@ -76,9 +82,8 @@ async function download(data) {
         });
 }
 
-function loadAllPages(data, pages) {
+function loadAllPages(data, pages, fullname) {
     const promises = [];
-    const fullname = cleanName(data.fullname);
 
     for (let i = 1; i <= pages; i++) {
         const promise = getJson(websiteUserUrl + data.username + '/projects.json?page=' + i)
@@ -191,8 +196,19 @@ function getFileSize(url) {
         });
 }
 
-function cleanName(name) {
-    return name.replace(/[/\\?%*:|"<>]/g, '-').trim();
+function cleanName(name, fallback = '') {
+    let clean = String(name ?? '')
+        .replace(/[\u0000-\u001f/\\?%*:|"<>]/g, '-')
+        .trim()
+        .replace(/[. ]+$/g, '');
+
+    if (!clean && fallback) return cleanName(fallback);
+
+    if (/^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(clean)) {
+        clean = '-' + clean;
+    }
+
+    return clean;
 }
 
 function getFileExtension(url) {

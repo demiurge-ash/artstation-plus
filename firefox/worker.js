@@ -12,11 +12,15 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     // Save File to folder
     if (message.message && message.message === 'downloadFile') {
         delete message.message;
-        chrome.downloads.download(message);
+        chrome.downloads.download(message, function (downloadId) {
+            sendResponse(downloadId);
+        });
+
+        return true;
 
     // Open Download Folder
-    } else if (message === "openFolder") {
-        chrome.downloads.showDefaultFolder();
+    } else if (message.message && message.message === 'openFolder') {
+        chrome.downloads.show(message.downloadId);
     }
 
 });
