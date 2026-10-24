@@ -23,7 +23,6 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         && (pageUrl.hostname === 'artstation.com' || pageUrl.hostname.endsWith('.artstation.com'));
     const isDialog = sender.url?.startsWith(chrome.runtime.getURL('ui/download.html') + '#');
     if (sender.id !== chrome.runtime.id || !Number.isInteger(sender.tab?.id) || (!isSite && !isDialog)
-        || typeof message.account !== 'string' || message.account.length > 128
         || typeof message.hash !== 'string' || !/^[a-zA-Z0-9]{1,64}$/.test(message.hash)) {
         sendResponse({ error: 'Invalid project cache request.' });
         return;
@@ -110,7 +109,7 @@ async function getDownloadState(id) {
 }
 
 async function handleProjectCacheMessage(message) {
-    const key = 'project_cache_v1:' + JSON.stringify([message.account.toLowerCase(), message.hash]);
+    const key = 'project_cache_v1:' + message.hash;
     const indexKey = 'project_cache_index_v1';
     const ttl = 5 * 60 * 1000;
     // Session quota counts memory, so reserve space beyond serialized payloads for strings and metadata.

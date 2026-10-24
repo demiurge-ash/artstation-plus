@@ -149,21 +149,20 @@ function createApiClient({ concurrency = 4, timeout = 15000, retries = 2, creden
     };
 }
 
-function createProjectJsonFetcher(getClient, getAccount) {
+function createProjectJsonFetcher(getClient) {
     return async function getProjectJson(url, validate) {
         const client = getClient();
-        const account = getAccount();
         if (client.signal.aborted) throw new DOMException('Request cancelled', 'AbortError');
         const match = /^https:\/\/www\.artstation\.com\/projects\/([a-zA-Z0-9]{1,64})\.json$/.exec(url);
-        if (!match || typeof account !== 'string') return client.getJson(url, validate);
-        const identity = { account: account.toLowerCase(), hash: match[1] };
+        if (!match) return client.getJson(url, validate);
+        const hash = match[1];
         let cacheAvailable = false;
         try {
-            const result = await chrome.runtime.sendMessage({ message: 'getProjectCache', ...identity });
+            const result = await chrome.runtime.sendMessage({ message: 'getProjectCache', hash: hash });
             if (!result || result.error) throw new Error(result?.error || 'Project cache did not respond.');
             cacheAvailable = true;
             if (client.signal.aborted) throw new DOMException('Request cancelled', 'AbortError');
-            if (getAccount() === account && result.data && (!validate || validate(result.data))) return result.data;
+            if (result.data && (!validate || validate(result.data))) return result.data;
         } catch (error) {
             if (client.signal.aborted) throw new DOMException('Request cancelled', 'AbortError');
             console.warn('Project cache:', error);
@@ -172,10 +171,10 @@ function createProjectJsonFetcher(getClient, getAccount) {
         const data = await client.getJson(url, validate);
         const timestamp = Date.now();
         const cachedData = selectProjectCacheData(data);
-        if (cacheAvailable && cachedData && !client.signal.aborted && getAccount() === account) {
+        if (cacheAvailable && cachedData && !client.signal.aborted) {
             try {
                 const result = await chrome.runtime.sendMessage({
-                    message: 'setProjectCache', ...identity, data: cachedData, timestamp: timestamp
+                    message: 'setProjectCache', hash: hash, data: cachedData, timestamp: timestamp
                 });
                 if (!result || result.error) throw new Error(result?.error || 'Project cache did not respond.');
             } catch (error) {

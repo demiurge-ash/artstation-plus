@@ -9,7 +9,7 @@
 
 const cache = new MemoryCache();
 const getJson = createCachedJsonFetcher();
-const getProjectJson = createProjectJsonFetcher(() => api, getUsername);
+const getProjectJson = createProjectJsonFetcher(() => api);
 const artBlock = 'art-plus-icons';
 const downloadButton = 'art-plus-download-button';
 const website = 'https://www.artstation.com/';
@@ -80,7 +80,6 @@ function download() {
                 sendResponse({
                     username: username,
                     fullname: title ? title.getAttribute('content') : username,
-                    cacheAccount: getUsername(),
                     parentOrigin: window.location.origin
                 });
             };
@@ -652,7 +651,8 @@ function processProject(element) {
         }, error => {
             if (isCurrent() && error.name !== 'AbortError') {
                 state.failed = true;
-                console.log(error);
+                const url = websiteProjectUrl + encodeURIComponent(hash) + '.json';
+                console.log(error.message.includes(url) ? error.message : error.message + ': ' + url);
             }
         }).catch(error => {
             if (version === pageVersion) console.error(error);
