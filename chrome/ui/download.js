@@ -1,7 +1,7 @@
 const website = 'https://www.artstation.com/';
 const websiteProjectUrl = website + 'projects/';
 const websiteUserUrl = website + 'users/';
-const downloadApi = createApiClient();
+const downloadApi = createApiClient({ credentials: 'include' });
 const token = window.location.hash.slice(1);
 const activeDownloads = new Map();
 let images = [];

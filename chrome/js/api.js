@@ -7,7 +7,7 @@ function isRetryableApiError(error) {
     return error.name === 'TimeoutError' || error instanceof TypeError || error.retryable === true;
 }
 
-function createApiClient({ concurrency = 4, timeout = 15000, retries = 2 } = {}) {
+function createApiClient({ concurrency = 4, timeout = 15000, retries = 2, credentials = 'same-origin' } = {}) {
     const controller = new AbortController();
     const queue = [];
     const pending = new Map();
@@ -47,9 +47,9 @@ function createApiClient({ concurrency = 4, timeout = 15000, retries = 2 } = {})
 
         try {
             if (controller.signal.aborted) throw abortError();
-            const response = await fetch(url, { method: method, signal: attemptController.signal });
+            const response = await fetch(url, { method: method, signal: attemptController.signal, credentials: credentials });
             if (!response.ok) {
-                const error = new Error('ArtStation request failed: ' + response.status);
+                const error = new Error('ArtStation request failed: ' + response.status + ' (' + method + ' ' + url + ')');
                 error.status = response.status;
                 error.retryable = [408, 429, 500, 502, 503, 504].includes(response.status);
                 if (error.retryable) {
@@ -126,7 +126,7 @@ function createApiClient({ concurrency = 4, timeout = 15000, retries = 2 } = {})
         getJson(url, validate) {
             return request(url, 'GET', response => response.json()).then(data => {
                 if (controller.signal.aborted) throw abortError();
-                if (validate && !validate(data)) throw new Error('Invalid ArtStation response');
+                if (validate && !validate(data)) throw new Error('Invalid ArtStation response: ' + url);
                 return data;
             });
         },
