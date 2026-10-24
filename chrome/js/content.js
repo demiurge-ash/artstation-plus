@@ -262,65 +262,64 @@ function showStatistics() {
         let previousKey = null;
         let previousStats = null;
         for (const key in statsData) {
-            if (parseInt(key) < statsKey) {
-                if (!previousKey || parseInt(key) > parseInt(previousKey)) {
-                    previousKey = key;
-                    previousStats = statsData[previousKey];
-                    const formattedDate = formatKeyToDate(previousKey);
+            if (parseInt(key) < statsKey && (!previousKey || parseInt(key) > parseInt(previousKey))) {
+                previousKey = key;
+            }
+        }
+        if (previousKey) {
+            previousStats = statsData[previousKey];
+            const formattedDate = formatKeyToDate(previousKey);
 
-                    const diffViews = statViews - previousStats.views;
-                    if (diffViews > 0 && statViews > 0) {
-                        let diffViewsElement = document.querySelector(".statistics-diff-views");
-                        if (!diffViewsElement) {
-                            diffViewsElement = document.createElement('span');
-                            diffViewsElement.classList.add('statistics-diff-views', 'stat-diff');
-                            diffViewsElement.title = `since ${formattedDate}`;
-                        }
-                        diffViewsElement.textContent = '+' + addSpacesToNumber(diffViews);
-                        const viewsEl = document.querySelector(".statistics-views-block");
-                        viewsEl.appendChild(diffViewsElement);
-                    }
-
-                    const diffLikes = statLikes - previousStats.likes;
-                    if (diffLikes > 0 && statLikes > 0) {
-                        let diffLikesElement = document.querySelector(".statistics-diff-likes");
-                        if (!diffLikesElement) {
-                            diffLikesElement = document.createElement('span');
-                            diffLikesElement.classList.add('statistics-diff-likes', 'stat-diff');
-                            diffLikesElement.title = `since ${formattedDate}`;
-                        }
-                        diffLikesElement.textContent = '+' + addSpacesToNumber(diffLikes);
-                        const likesEl = document.querySelector(".statistics-likes-block");
-                        likesEl.appendChild(diffLikesElement);
-                    }
-
-                    const diffFollowers = statFollowers - previousStats.followers;
-                    if (diffFollowers > 0 && statFollowers > 0) {
-                        let diffFollowersElement = document.querySelector(".statistics-diff-followers");
-                        if (!diffFollowersElement) {
-                            diffFollowersElement = document.createElement('span');
-                            diffFollowersElement.classList.add('statistics-diff-followers', 'stat-diff');
-                            diffFollowersElement.title = `since ${formattedDate}`;
-                        }
-                        diffFollowersElement.textContent = '+' + addSpacesToNumber(diffFollowers);
-                        const followersEl = document.querySelector(".statistics-followers-block");
-                        followersEl.appendChild(diffFollowersElement);
-                    }
-
-                    const diffComments = statComments - previousStats.comments;
-                    if (diffComments > 0 && statComments > 0) {
-                        let diffCommentsElement = document.querySelector(".statistics-diff-comments");
-                        if (!diffCommentsElement) {
-                            diffCommentsElement = document.createElement('span');
-                            diffCommentsElement.classList.add('statistics-diff-comments', 'stat-diff');
-                            diffCommentsElement.title = `since ${formattedDate}`;
-                        }
-                        diffCommentsElement.textContent = '+' + addSpacesToNumber(diffComments);
-                        const commentsEl = document.querySelector(".statistics-comments-block");
-                        commentsEl.appendChild(diffCommentsElement);
-                    }
-
+            const diffViews = statViews - previousStats.views;
+            if (diffViews > 0 && statViews > 0) {
+                let diffViewsElement = document.querySelector(".statistics-diff-views");
+                if (!diffViewsElement) {
+                    diffViewsElement = document.createElement('span');
+                    diffViewsElement.classList.add('statistics-diff-views', 'stat-diff');
+                    diffViewsElement.title = `since ${formattedDate}`;
                 }
+                diffViewsElement.textContent = '+' + addSpacesToNumber(diffViews);
+                const viewsEl = document.querySelector(".statistics-views-block");
+                viewsEl.appendChild(diffViewsElement);
+            }
+
+            const diffLikes = statLikes - previousStats.likes;
+            if (diffLikes > 0 && statLikes > 0) {
+                let diffLikesElement = document.querySelector(".statistics-diff-likes");
+                if (!diffLikesElement) {
+                    diffLikesElement = document.createElement('span');
+                    diffLikesElement.classList.add('statistics-diff-likes', 'stat-diff');
+                    diffLikesElement.title = `since ${formattedDate}`;
+                }
+                diffLikesElement.textContent = '+' + addSpacesToNumber(diffLikes);
+                const likesEl = document.querySelector(".statistics-likes-block");
+                likesEl.appendChild(diffLikesElement);
+            }
+
+            const diffFollowers = statFollowers - previousStats.followers;
+            if (diffFollowers > 0 && statFollowers > 0) {
+                let diffFollowersElement = document.querySelector(".statistics-diff-followers");
+                if (!diffFollowersElement) {
+                    diffFollowersElement = document.createElement('span');
+                    diffFollowersElement.classList.add('statistics-diff-followers', 'stat-diff');
+                    diffFollowersElement.title = `since ${formattedDate}`;
+                }
+                diffFollowersElement.textContent = '+' + addSpacesToNumber(diffFollowers);
+                const followersEl = document.querySelector(".statistics-followers-block");
+                followersEl.appendChild(diffFollowersElement);
+            }
+
+            const diffComments = statComments - previousStats.comments;
+            if (diffComments > 0 && statComments > 0) {
+                let diffCommentsElement = document.querySelector(".statistics-diff-comments");
+                if (!diffCommentsElement) {
+                    diffCommentsElement = document.createElement('span');
+                    diffCommentsElement.classList.add('statistics-diff-comments', 'stat-diff');
+                    diffCommentsElement.title = `since ${formattedDate}`;
+                }
+                diffCommentsElement.textContent = '+' + addSpacesToNumber(diffComments);
+                const commentsEl = document.querySelector(".statistics-comments-block");
+                commentsEl.appendChild(diffCommentsElement);
             }
         }
 
