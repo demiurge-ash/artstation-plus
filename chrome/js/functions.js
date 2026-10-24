@@ -89,12 +89,13 @@ function insertIcon(block, element, icon, size) {
 
 function createDownloadButton() {
     let alreadyButton = document.querySelector('.'+downloadButton);
-    if (alreadyButton) return alreadyButton;
+    if (alreadyButton) return false;
 
     const panel = document.querySelector('.user-buttons');
     if (!panel) return false;
 
     let li = document.createElement('div');
+    li.classList.add('art-plus-download-container');
     li.style.marginTop = '16px';
     let button = document.createElement('button');
     button.classList.add('btn', 'btn-warning', 'w-100', downloadButton);
@@ -144,7 +145,7 @@ function createDialog(url) {
 
     iframe.onload = function() {
         setTimeout(function() {
-            iframe.contentWindow.focus();
+            if (iframe.isConnected) iframe.contentWindow.focus();
         }, 100);
     };
 
@@ -237,41 +238,40 @@ function getHash(project, name) {
     switch (name) {
         case "myprojects":
             link = project.querySelector('.project-link')
-                .getAttribute("href");
+                ?.getAttribute("href");
             break;
         case "artwork":
             link = path;
             break;
         default:
             link = project.querySelector('a')
-                .getAttribute("href")
-                .split(/[#?]/)[0];
+                ?.getAttribute("href");
             break;
     }
-    return link.replace('/edit', '').split('/').pop();
+    return link ? link.split(/[#?]/)[0].replace('/edit', '').split('/').pop() : undefined;
 }
 
 async function getProjectInfo(hash) {
     if (!hash) return;
 
     let data = cache.get(hash);
-    if (data) return data;
+    if (data && typeof data === 'object' && data.id !== undefined) return data;
 
     let response = await fetch(websiteProjectUrl + hash + '.json', {})
-        .then(response => response.json())
-        .then(data => {
-            return data;
-        }).catch(reason => {
-            console.log(reason);
+        .then(response => {
+            if (!response.ok) throw new Error('Project request failed: ' + response.status);
+            return response.json();
         });
+    if (!response || typeof response !== 'object' || response.id === undefined) {
+        throw new Error('Invalid project response');
+    }
     cache.set(hash, response);
     return response;
 }
 
 function checkUrlChange() {
     if (!path) return;
-    if (path !== window.location.pathname) {
-        if (handleID) clearInterval(handleID);
+    if (path !== window.location.pathname || pathQuery !== window.location.search) {
         init();
     }
 }
@@ -289,6 +289,7 @@ function injectsCSS() {
 }
 
 function loadTrendingPages() {
+    const version = pageVersion;
     const promises = [];
     const pages = 3;
     const perPage = 100;
@@ -296,6 +297,7 @@ function loadTrendingPages() {
     for (let i = 1; i <= pages; i++) {
         const promise = getJson(website + 'api/v2/community/explore/projects/trending.json?dimension=all&per_page=' + perPage + '&page=' + i)
             .then(function(page) {
+                if (version !== pageVersion) return;
                 const pageData = page.data;
                 let place = 1;
                 const itemPromises = pageData.map(function(item) {
@@ -350,8 +352,12 @@ function createCachedJsonFetcher(cacheDuration = 3 * 60 * 1000) { // 3 minutes
 }*/
 
 function getOption(option) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         chrome.storage.local.get(option, (data) => {
+            if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+                return;
+            }
             const setting = data[option] !== undefined ? data[option] : options[option];
             resolve(setting);
         });

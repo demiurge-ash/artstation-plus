@@ -3,17 +3,26 @@ const websiteProjectUrl = website + 'projects/';
 const websiteUserUrl = website + 'users/';
 let images;
 let closeDialog = false;
+const downloadController = new AbortController();
 
+closeButton();
 chrome.storage.local.get('userdata', function (items) {
+    if (chrome.runtime.lastError) {
+        showDownloadError(new Error(chrome.runtime.lastError.message));
+        return;
+    }
     download(items.userdata);
 });
 
 async function download(data) {
     images = [];
 
-    closeButton();
+    if (!data || !data.username) {
+        showDownloadError(new Error('Unable to identify the artist. Reopen the download dialog.'));
+        return;
+    }
 
-    getJson(websiteUserUrl + data.username + '/projects.json?per_page=1')
+    return getJson(websiteUserUrl + data.username + '/projects.json?per_page=1')
         .then(async function (result) {
             const per_page = 50;
             const totalCount = result.total_count;
@@ -21,6 +30,7 @@ async function download(data) {
             const fullname = cleanName(data.fullname, data.username);
 
             await loadAllPages(data, pages, fullname);
+            if (closeDialog) return;
 
             stopSpin();
 
@@ -46,14 +56,17 @@ async function download(data) {
                 for (const image of images) {
                     if (closeDialog) return;
 
-                    console.log('downloaded: ' + image.filename);
-
                     delete image.filesize;
                     image.conflictAction = 'overwrite';
                     image.saveAs = false;
                     image.message = "downloadFile";
 
-                    const downloadId = await chrome.runtime.sendMessage(image);
+                    const response = await chrome.runtime.sendMessage(image);
+                    if (!response || response.error || !Number.isInteger(response.downloadId)) {
+                        throw new Error(response?.error || 'Unable to start the download.');
+                    }
+                    if (closeDialog) return;
+                    const downloadId = response.downloadId;
                     if (firstDownloadId === undefined) firstDownloadId = downloadId;
 
                     completedCount++;
@@ -61,17 +74,23 @@ async function download(data) {
                     progressEl.style.width = progress + '%';
 
                     await sleep(200);
+                    if (closeDialog) return;
 
                     if (completedCount === totalImages) {
                         const doneEl = document.getElementById('done');
                         doneEl.classList.remove('none');
                         const showBtn = document.querySelector('.show-folder');
 
-                        showBtn.onclick = function () {
-                            chrome.runtime.sendMessage({
-                                message: 'openFolder',
-                                downloadId: firstDownloadId
-                            });
+                        showBtn.onclick = async function () {
+                            try {
+                                const response = await chrome.runtime.sendMessage({
+                                    message: 'openFolder',
+                                    downloadId: firstDownloadId
+                                });
+                                if (response?.error) throw new Error(response.error);
+                            } catch (error) {
+                                showDownloadError(error);
+                            }
                         }
                     }
                 }
@@ -79,6 +98,9 @@ async function download(data) {
                 const foundEl = document.getElementById('found-nothing');
                 foundEl.classList.remove('none');
             }
+        }).catch(error => {
+            downloadController.abort();
+            if (!closeDialog) showDownloadError(error);
         });
 }
 
@@ -101,52 +123,47 @@ function loadAllPages(data, pages, fullname) {
 }
 
 async function saveImages(item, fullname) {
-    return new Promise(async (resolve, reject) => {
-        try {
-            const project = await getJson(websiteProjectUrl + item.hash_id + '.json');
-            let iteration = 0;
+    if (closeDialog) return;
+    const project = await getJson(websiteProjectUrl + item.hash_id + '.json');
+    let iteration = 0;
 
-            const processedAssets = project.assets
-                .filter(asset => asset.asset_type === 'image');
+    const processedAssets = project.assets
+        .filter(asset => asset.asset_type === 'image');
 
-            for (const asset of processedAssets) {
-                if (closeDialog) return;
+    for (const asset of processedAssets) {
+        if (closeDialog) return;
 
-                let positionName;
-                if (iteration > 0) positionName = iteration;
-                iteration++;
+        let positionName;
+        if (iteration > 0) positionName = iteration;
+        iteration++;
 
-                const image = asset.image_url;
-                const fileName = fullname
-                    + '/'
-                    + fullname
-                    + ' - '
-                    + cleanName(item.title)
-                    + ' - '
-                    + (positionName ? positionName + ' - ' : '')
-                    + item.hash_id
-                    + '.'
-                    + getFileExtension(image);
+        const image = asset.image_url;
+        const fileName = fullname
+            + '/'
+            + fullname
+            + ' - '
+            + cleanName(item.title)
+            + ' - '
+            + (positionName ? positionName + ' - ' : '')
+            + item.hash_id
+            + '.'
+            + getFileExtension(image);
 
-                let filesize = await getFileSize(image);
+        let filesize = await getFileSize(image);
+        if (closeDialog || downloadController.signal.aborted) return;
 
-                const imageData = {
-                    url: image,
-                    filename: fileName,
-                    filesize: filesize,
-                };
+        const imageData = {
+            url: image,
+            filename: fileName,
+            filesize: filesize,
+        };
 
-                await updateFoundCount();
-                await sleep(100);
+        await updateFoundCount();
+        await sleep(100);
+        if (closeDialog || downloadController.signal.aborted) return;
 
-                images.push(imageData);
-            }
-
-            resolve();
-        } catch (error) {
-            reject(error);
-        }
-    });
+        images.push(imageData);
+    }
 }
 
 function calculateTotalSize() {
@@ -167,6 +184,16 @@ function stopSpin() {
     spinEl.classList.remove('art-plus-icon-spin');
 }
 
+function showDownloadError(error) {
+    console.error(error);
+    stopSpin();
+    document.getElementById('search').classList.add('none');
+    document.getElementById('done').classList.add('none');
+    const errorEl = document.getElementById('error');
+    errorEl.textContent = 'Unable to complete the operation. ' + error.message;
+    errorEl.classList.remove('none');
+}
+
 function updateFoundCount() {
     const foundCountEl = document.getElementById('found-count');
     let foundCount = parseInt(foundCountEl.textContent);
@@ -181,8 +208,9 @@ function updateFoundCount() {
 }
 
 function getFileSize(url) {
-    return fetch(url, {})
+    return fetch(url, { signal: downloadController.signal })
         .then(function(response) {
+            if (!response.ok) return 0;
             const contentLength = response.headers.get('Content-Length');
             if (contentLength !== null) {
                 return parseInt(contentLength, 10);
@@ -191,8 +219,9 @@ function getFileSize(url) {
             }
         })
         .catch(function(error) {
-            return 0;
+            if (error.name === 'AbortError') throw error;
             console.log(error);
+            return 0;
         });
 }
 
@@ -216,8 +245,9 @@ function getFileExtension(url) {
 }
 
 function getJson(url) {
-    return fetch(url, {})
+    return fetch(url, { signal: downloadController.signal })
         .then(function(response) {
+            if (!response.ok) throw new Error('ArtStation request failed: ' + response.status);
             return response.json();
         })
         .then(function(data) {
@@ -240,6 +270,7 @@ function closeButton() {
 
 function closeDialogEvent() {
     closeDialog = true;
+    downloadController.abort();
     window.parent.postMessage('closeModal', '*');
 }
 

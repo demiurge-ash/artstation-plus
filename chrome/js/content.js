@@ -31,36 +31,53 @@ let statLikes = 0;
 let statFollowers = 0;
 let statComments = 0;
 let statsKey;
+let pageVersion = 0;
+let pendingProjects = new WeakSet();
+let closeDownloadDialog;
 
 injectsCSS();
-init();
 setInterval(checkUrlChange, 1000);
+init();
 
 function download() {
     let button = createDownloadButton();
     if (!button) return;
 
-    button.addEventListener('click', () => {
-        const button = document.querySelector('.' + downloadButton)
-        button.setAttribute('disabled','disabled');
+    button.addEventListener('click', async () => {
+        if (button.disabled) return;
+        button.disabled = true;
+        const version = pageVersion;
 
-        let data = {
-            fullname: document.querySelector('meta[property="og:title"]').getAttribute('content'),
-            username: path.split('/')[1]
-        };
+        try {
+            const username = path.split('/')[1];
+            const title = document.querySelector('meta[property="og:title"]');
+            await chrome.storage.local.set({
+                userdata: {
+                    fullname: title ? title.getAttribute('content') : username,
+                    username: username
+                }
+            });
+            if (version !== pageVersion) return;
 
-        chrome.storage.local.set({
-            userdata: data
-        });
+            const dialog = createDialog('/ui/download.html');
+            const onMessage = function (event) {
+                if (event.origin === 'chrome-extension://' + chrome.runtime.id && event.data === 'closeModal') {
+                    closeDownloadDialog();
+                }
+            };
 
-        const dialog = createDialog('/ui/download.html');
-
-        window.addEventListener('message', function (event) {
-            if (event.data === 'closeModal') {
+            closeDownloadDialog = function () {
+                window.removeEventListener('message', onMessage);
                 dialog.close();
-                button.removeAttribute('disabled');
-            }
-        });
+                dialog.remove();
+                button.disabled = false;
+                closeDownloadDialog = undefined;
+            };
+            window.addEventListener('message', onMessage);
+        } catch (error) {
+            button.disabled = false;
+            console.error(error);
+        }
     });
 }
 
@@ -84,7 +101,7 @@ function userPage() {
 
     if (visibleUserProject) {
         visibleUserProject.classList.add('visible-gallery');
-        info = {
+        const info = {
             name: "main",
             container: ".gallery-grid",
             item: "projects-list-item",
@@ -155,16 +172,17 @@ function InfoBlockMain(data, div) {
 }
 
 function createStatistics() {
+    const header = document.querySelector(".page-title");
+    if (!header || header.querySelector('.art-plus-statistics')) return;
+
     const currentDate = new Date();
     const year = currentDate.getFullYear();
     const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
     const day = currentDate.getDate().toString().padStart(2, '0');
     statsKey = year + month + day;
 
-    const header = document.querySelector(".page-title");
-
     const stats = document.createElement('div');
-    stats.classList.add('statistics');
+    stats.classList.add('statistics', 'art-plus-statistics');
 
     const viewsEl = document.createElement('span');
     viewsEl.classList.add('statistics-views-block', 'stat-block');
@@ -204,12 +222,15 @@ function createStatistics() {
 function loadUserInfo() {
     const username = getUsername();
     if (!username) return;
+    const version = pageVersion;
 
     getJson(websiteUserUrl + username + '.json')
         .then(function (result) {
+            if (version !== pageVersion) return;
             const followers = result.followers_count;
-            statFollowers = followers;
             const followersEl = document.querySelector(".statistics-followers");
+            if (!followersEl) return;
+            statFollowers = followers;
             followersEl.textContent = addSpacesToNumber(followers) + ' followers';
         }).catch(reason => {
             console.log(reason);
@@ -218,19 +239,27 @@ function loadUserInfo() {
 
 function showStatistics() {
     if (!projectsLoaded) return;
-    if (statsID) clearInterval(statsID);
 
     const views = document.querySelector(".statistics-views");
-    views.textContent = addSpacesToNumber(statViews) + ' views';
-
     const likes = document.querySelector(".statistics-likes");
-    likes.textContent = addSpacesToNumber(statLikes) + ' likes';
-
     const comments = document.querySelector(".statistics-comments");
+    if (!views || !likes || !comments) return;
+    if (statsID) clearInterval(statsID);
+    statsID = undefined;
+
+    views.textContent = addSpacesToNumber(statViews) + ' views';
+    likes.textContent = addSpacesToNumber(statLikes) + ' likes';
     comments.textContent = addSpacesToNumber(statComments) + ' comments';
+    const version = pageVersion;
 
     chrome.storage.local.get('stats', function(result) {
-        const statsData = result.stats;
+        const error = chrome.runtime.lastError;
+        if (version !== pageVersion) return;
+        if (error) {
+            console.error(error.message);
+            return;
+        }
+        const statsData = result.stats || {};
 
         let previousKey = null;
         let previousStats = null;
@@ -335,10 +364,14 @@ function updateStatistics(data) {
 }
 
 function createSortSelect() {
-    let selectSpan = createSelectSpan();
-    let select = createSortSelectEl();
+    if (document.querySelector('.art-plus-sort')) return;
     const portfolioContainer = document.querySelector(".portfolio-content-select");
-    const firstPortfolioDiv = portfolioContainer.querySelector('div:first-child');
+    const firstPortfolioDiv = portfolioContainer?.querySelector('div:first-child');
+    if (!firstPortfolioDiv) return;
+
+    let selectSpan = createSelectSpan();
+    selectSpan.classList.add('art-plus-sort');
+    let select = createSortSelectEl();
     selectSpan.appendChild(select);
     firstPortfolioDiv.insertBefore(selectSpan, firstPortfolioDiv.firstChild);
 
@@ -434,46 +467,96 @@ function handleUnidentifiedPage() {
 function handle(info) {
     if (handleStatus) return;
     handleStatus = true;
+    const version = pageVersion;
+    const pending = pendingProjects;
 
-    const projectsLists = document.querySelectorAll(info.container);
-    projectsLists.forEach((projectsList) => {
-        const divs = projectsList.querySelectorAll(info.item);
-        let activeRequests = 0;
-        divs.forEach((div) => {
+    try {
+        if (info.name === 'myprojects') {
+            createSortSelect();
+            createStatistics();
+        }
 
-            switchToLegacyDesign(div, info);
+        let hasProjects = false;
+        let allProjectsLoaded = true;
+        const projectsLists = document.querySelectorAll(info.container);
+        projectsLists.forEach((projectsList) => {
+            const divs = projectsList.querySelectorAll(info.item);
+            divs.forEach((div) => {
+                hasProjects = true;
+                try {
+                    switchToLegacyDesign(div, info);
+                    if (div.querySelector('.' + artBlock)) return;
+                    allProjectsLoaded = false;
+                    if (pending.has(div)) return;
 
-            if (!div.querySelector('.' + artBlock)) {
-                const hash = getHash(div, info.name);
-                activeRequests++;
-                getProjectInfo(hash)
-                    .then(data => {
-                        if (data !== 'undefined') {
-                            createInfoBlock(data, div, info.name);
-                        }
-                    }).catch(reason => {
-                        console.log(reason);
-                    }).finally(() => {
-                        activeRequests--;
-                        if (activeRequests === 0) {
-                            projectsLoaded = true;
-                        }
-                });
-            }
+                    const hash = getHash(div, info.name);
+                    if (!hash) return;
+                    pending.add(div);
+                    getProjectInfo(hash)
+                        .then(data => {
+                            if (version === pageVersion && div.isConnected && !div.querySelector('.' + artBlock)) {
+                                createInfoBlock(data, div, info.name);
+                            }
+                        }).catch(reason => {
+                            console.log(reason);
+                        }).finally(() => {
+                            pending.delete(div);
+                        });
+                } catch (error) {
+                    allProjectsLoaded = false;
+                    console.error(error);
+                }
+            });
         });
-    });
+        projectsLoaded = hasProjects && allProjectsLoaded;
+    } catch (error) {
+        console.error(error);
+    } finally {
+        handleStatus = false;
+    }
+}
+
+function cleanupPage() {
+    pageVersion++;
+    clearInterval(handleID);
+    clearInterval(handleUnidentifiedPageID);
+    clearInterval(statsID);
+    handleID = undefined;
+    handleUnidentifiedPageID = undefined;
+    statsID = undefined;
     handleStatus = false;
+    projectsLoaded = false;
+    pendingProjects = new WeakSet();
+    uniqueIds = [];
+    trend = [];
+    statViews = 0;
+    statLikes = 0;
+    statFollowers = 0;
+    statComments = 0;
+    statsKey = undefined;
+
+    if (closeDownloadDialog) closeDownloadDialog();
+    const selectors = [
+        '.art-plus-icons-list', '.art-plus-wrapper',
+        '.art-plus-label-crosshairs', '.art-plus-label-trend',
+        '.art-plus-statistics', '.art-plus-sort', '.art-plus-download-container'
+    ];
+    document.querySelectorAll(selectors.join(', ')).forEach(element => element.remove());
+    document.querySelectorAll('.' + artBlock).forEach(element => element.classList.remove(artBlock));
 }
 
 function init() {
+    cleanupPage();
     let info = false;
     setPath();
+    const version = pageVersion;
 
     getOption('legacyDesign').then((legacyDesign) => {
+        if (version !== pageVersion) return;
         options['legacyDesign'] = legacyDesign;
-        if (legacyDesign) {
-            document.body.classList.add('legacy-design');
-        }
+        document.body.classList.toggle('legacy-design', legacyDesign);
+    }).catch(error => {
+        console.error(error);
     });
 
     //  Trending, Following & Latest Galleries
@@ -496,8 +579,6 @@ function init() {
             container: ".project-list",
             item: ".project"
         }
-        createSortSelect();
-        createStatistics();
     }
 
     //  Artwork page
