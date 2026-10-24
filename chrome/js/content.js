@@ -33,6 +33,8 @@ let statComments = 0;
 let statsKey;
 let pageVersion = 0;
 let pendingProjects = new WeakSet();
+let failedProjects = new WeakSet();
+let api;
 let closeDownloadDialog;
 
 injectsCSS();
@@ -224,7 +226,7 @@ function loadUserInfo() {
     if (!username) return;
     const version = pageVersion;
 
-    getJson(websiteUserUrl + username + '.json')
+    getJson(websiteUserUrl + username + '.json', data => data && isApiCount(data.followers_count))
         .then(function (result) {
             if (version !== pageVersion) return;
             const followers = result.followers_count;
@@ -233,7 +235,7 @@ function loadUserInfo() {
             statFollowers = followers;
             followersEl.textContent = addSpacesToNumber(followers) + ' followers';
         }).catch(reason => {
-            console.log(reason);
+            if (reason.name !== 'AbortError') console.log(reason);
         });;
 }
 
@@ -469,6 +471,7 @@ function handle(info) {
     handleStatus = true;
     const version = pageVersion;
     const pending = pendingProjects;
+    const failed = failedProjects;
 
     try {
         if (info.name === 'myprojects') {
@@ -487,7 +490,7 @@ function handle(info) {
                     switchToLegacyDesign(div, info);
                     if (div.querySelector('.' + artBlock)) return;
                     allProjectsLoaded = false;
-                    if (pending.has(div)) return;
+                    if (pending.has(div) || failed.has(div)) return;
 
                     const hash = getHash(div, info.name);
                     if (!hash) return;
@@ -497,8 +500,13 @@ function handle(info) {
                             if (version === pageVersion && div.isConnected && !div.querySelector('.' + artBlock)) {
                                 createInfoBlock(data, div, info.name);
                             }
+                        }, reason => {
+                            if (version === pageVersion && reason.name !== 'AbortError') {
+                                failed.add(div);
+                                console.log(reason);
+                            }
                         }).catch(reason => {
-                            console.log(reason);
+                            if (version === pageVersion) console.error(reason);
                         }).finally(() => {
                             pending.delete(div);
                         });
@@ -518,6 +526,8 @@ function handle(info) {
 
 function cleanupPage() {
     pageVersion++;
+    if (api) api.abort();
+    api = createApiClient();
     clearInterval(handleID);
     clearInterval(handleUnidentifiedPageID);
     clearInterval(statsID);
@@ -527,6 +537,7 @@ function cleanupPage() {
     handleStatus = false;
     projectsLoaded = false;
     pendingProjects = new WeakSet();
+    failedProjects = new WeakSet();
     uniqueIds = [];
     trend = [];
     statViews = 0;
@@ -594,7 +605,7 @@ function init() {
     loadTrendingPages()
         .then(function(result) {})
         .catch(function(error) {
-            console.error(error);
+            if (error.name !== 'AbortError') console.error(error);
         });
 
     if (info) handleID = setInterval(handle, 1000, info);

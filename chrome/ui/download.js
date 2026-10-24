@@ -3,7 +3,7 @@ const websiteProjectUrl = website + 'projects/';
 const websiteUserUrl = website + 'users/';
 let images;
 let closeDialog = false;
-const downloadController = new AbortController();
+const downloadApi = createApiClient();
 
 closeButton();
 chrome.storage.local.get('userdata', function (items) {
@@ -22,7 +22,8 @@ async function download(data) {
         return;
     }
 
-    return getJson(websiteUserUrl + data.username + '/projects.json?per_page=1')
+    return getJson(websiteUserUrl + data.username + '/projects.json?per_page=1',
+        result => result && isApiCount(result.total_count))
         .then(async function (result) {
             const per_page = 50;
             const totalCount = result.total_count;
@@ -99,7 +100,7 @@ async function download(data) {
                 foundEl.classList.remove('none');
             }
         }).catch(error => {
-            downloadController.abort();
+            downloadApi.abort();
             if (!closeDialog) showDownloadError(error);
         });
 }
@@ -108,7 +109,9 @@ function loadAllPages(data, pages, fullname) {
     const promises = [];
 
     for (let i = 1; i <= pages; i++) {
-        const promise = getJson(websiteUserUrl + data.username + '/projects.json?page=' + i)
+        const promise = getJson(websiteUserUrl + data.username + '/projects.json?per_page=50&page=' + i,
+            page => page && Array.isArray(page.data)
+                && page.data.every(item => item && typeof item.hash_id === 'string' && item.hash_id.length > 0))
             .then(function(page) {
                 const pageData = page.data;
                 const itemPromises = pageData.map(function(item) {
@@ -124,14 +127,17 @@ function loadAllPages(data, pages, fullname) {
 
 async function saveImages(item, fullname) {
     if (closeDialog) return;
-    const project = await getJson(websiteProjectUrl + item.hash_id + '.json');
+    const project = await getJson(websiteProjectUrl + item.hash_id + '.json',
+        data => data && Array.isArray(data.assets) && data.assets.every(asset => asset
+            && typeof asset.asset_type === 'string'
+            && (asset.asset_type !== 'image' || (typeof asset.image_url === 'string' && asset.image_url.length > 0))));
     let iteration = 0;
 
     const processedAssets = project.assets
         .filter(asset => asset.asset_type === 'image');
 
     for (const asset of processedAssets) {
-        if (closeDialog) return;
+        if (closeDialog || downloadApi.signal.aborted) return;
 
         let positionName;
         if (iteration > 0) positionName = iteration;
@@ -150,7 +156,7 @@ async function saveImages(item, fullname) {
             + getFileExtension(image);
 
         let filesize = await getFileSize(image);
-        if (closeDialog || downloadController.signal.aborted) return;
+        if (closeDialog || downloadApi.signal.aborted) return;
 
         const imageData = {
             url: image,
@@ -160,7 +166,7 @@ async function saveImages(item, fullname) {
 
         await updateFoundCount();
         await sleep(100);
-        if (closeDialog || downloadController.signal.aborted) return;
+        if (closeDialog || downloadApi.signal.aborted) return;
 
         images.push(imageData);
     }
@@ -208,16 +214,7 @@ function updateFoundCount() {
 }
 
 function getFileSize(url) {
-    return fetch(url, { signal: downloadController.signal })
-        .then(function(response) {
-            if (!response.ok) return 0;
-            const contentLength = response.headers.get('Content-Length');
-            if (contentLength !== null) {
-                return parseInt(contentLength, 10);
-            } else {
-                return 0;
-            }
-        })
+    return downloadApi.getFileSize(url)
         .catch(function(error) {
             if (error.name === 'AbortError') throw error;
             console.log(error);
@@ -244,15 +241,8 @@ function getFileExtension(url) {
     return url.split('.').pop().split(/[#?]/)[0];
 }
 
-function getJson(url) {
-    return fetch(url, { signal: downloadController.signal })
-        .then(function(response) {
-            if (!response.ok) throw new Error('ArtStation request failed: ' + response.status);
-            return response.json();
-        })
-        .then(function(data) {
-            return data;
-        });
+function getJson(url, validate) {
+    return downloadApi.getJson(url, validate);
 }
 
 function closeButton() {
@@ -270,7 +260,7 @@ function closeButton() {
 
 function closeDialogEvent() {
     closeDialog = true;
-    downloadController.abort();
+    downloadApi.abort();
     window.parent.postMessage('closeModal', '*');
 }
 

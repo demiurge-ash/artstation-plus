@@ -41,7 +41,7 @@
   "content_scripts": [
     {
       "matches": ["*://*.artstation.com/*"],
-      "js": ["js/functions.js", "js/content.js"],
+      "js": ["js/api.js", "js/functions.js", "js/content.js"],
       "run_at": "document_idle"
     }
   ]

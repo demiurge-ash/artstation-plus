@@ -251,20 +251,18 @@ function getHash(project, name) {
     return link ? link.split(/[#?]/)[0].replace('/edit', '').split('/').pop() : undefined;
 }
 
+function isProjectInfo(data) {
+    return data && isApiCount(data.id) && isApiCount(data.views_count) && isApiCount(data.likes_count)
+        && (data.comments_count == null || isApiCount(data.comments_count));
+}
+
 async function getProjectInfo(hash) {
     if (!hash) return;
 
     let data = cache.get(hash);
-    if (data && typeof data === 'object' && data.id !== undefined) return data;
+    if (isProjectInfo(data)) return data;
 
-    let response = await fetch(websiteProjectUrl + hash + '.json', {})
-        .then(response => {
-            if (!response.ok) throw new Error('Project request failed: ' + response.status);
-            return response.json();
-        });
-    if (!response || typeof response !== 'object' || response.id === undefined) {
-        throw new Error('Invalid project response');
-    }
+    const response = await api.getJson(websiteProjectUrl + hash + '.json', isProjectInfo);
     cache.set(hash, response);
     return response;
 }
@@ -295,7 +293,8 @@ function loadTrendingPages() {
     const perPage = 100;
 
     for (let i = 1; i <= pages; i++) {
-        const promise = getJson(website + 'api/v2/community/explore/projects/trending.json?dimension=all&per_page=' + perPage + '&page=' + i)
+        const promise = getJson(website + 'api/v2/community/explore/projects/trending.json?dimension=all&per_page=' + perPage + '&page=' + i,
+            data => data && Array.isArray(data.data) && data.data.every(item => item && isApiCount(item.id)))
             .then(function(page) {
                 if (version !== pageVersion) return;
                 const pageData = page.data;
@@ -313,17 +312,17 @@ function loadTrendingPages() {
 }
 
 function createCachedJsonFetcher(cacheDuration = 3 * 60 * 1000) { // 3 minutes
-    return async function getJson(url) {
+    return async function getJson(url, validate) {
         const cacheKey = `cached_json_${url}`;
         const cachedData = cache.get(cacheKey);
+        const validCache = cachedData && cachedData.data && (!validate || validate(cachedData.data));
 
-        if (cachedData && cachedData.timestamp && (Date.now() - cachedData.timestamp) < cacheDuration) {
+        if (validCache && cachedData.timestamp && (Date.now() - cachedData.timestamp) < cacheDuration) {
             return cachedData.data;
         }
 
         try {
-            const response = await fetch(url, {});
-            const data = await response.json();
+            const data = await api.getJson(url, validate);
 
             cache.set(cacheKey, {
                 data: data,
@@ -333,7 +332,7 @@ function createCachedJsonFetcher(cacheDuration = 3 * 60 * 1000) { // 3 minutes
             return data;
 
         } catch (error) {
-            if (cachedData) {
+            if (validCache && isRetryableApiError(error)) {
                 return cachedData.data;
             }
             throw error;
