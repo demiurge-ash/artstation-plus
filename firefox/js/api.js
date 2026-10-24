@@ -13,6 +13,7 @@ function createApiClient({ concurrency = 4, timeout = 15000, retries = 2, creden
     const pending = new Map();
     const pausedUntil = new Map();
     let activeRequests = 0;
+    let nextApiRequestAt = 0;
 
     function abortError() {
         return new DOMException('Request cancelled', 'AbortError');
@@ -80,10 +81,15 @@ function createApiClient({ concurrency = 4, timeout = 15000, retries = 2, creden
 
     async function fetchWithRetries(url, method, read) {
         const origin = new URL(url).origin;
+        const interval = method === 'GET' && origin === 'https://www.artstation.com' ? 100 : 0;
         for (let attempt = 0; ; attempt++) {
-            while ((pausedUntil.get(origin) || 0) > Date.now()) {
-                await wait(pausedUntil.get(origin) - Date.now());
+            while (true) {
+                const nextStart = Math.max(pausedUntil.get(origin) || 0, interval ? nextApiRequestAt : 0);
+                const delay = nextStart - Date.now();
+                if (delay <= 0) break;
+                await wait(delay);
             }
+            if (interval) nextApiRequestAt = Date.now() + interval;
             try {
                 return await fetchOnce(url, method, read);
             } catch (error) {
