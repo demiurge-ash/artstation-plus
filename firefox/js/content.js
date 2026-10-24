@@ -9,6 +9,7 @@
 
 const cache = new MemoryCache();
 const getJson = createCachedJsonFetcher();
+const getProjectJson = createProjectJsonFetcher(() => api, getUsername);
 const artBlock = 'art-plus-icons';
 const downloadButton = 'art-plus-download-button';
 const website = 'https://www.artstation.com/';
@@ -79,6 +80,7 @@ function download() {
                 sendResponse({
                     username: username,
                     fullname: title ? title.getAttribute('content') : username,
+                    cacheAccount: getUsername(),
                     parentOrigin: window.location.origin
                 });
             };

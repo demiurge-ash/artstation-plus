@@ -260,12 +260,13 @@ function isProjectInfo(data) {
 async function getProjectInfo(hash) {
     if (!hash) return;
 
-    return getJson(websiteProjectUrl + encodeURIComponent(hash) + '.json', isProjectInfo, data => ({
+    const data = await getProjectJson(websiteProjectUrl + encodeURIComponent(hash) + '.json', isProjectInfo);
+    return {
         id: Number(data.id),
         views_count: Number(data.views_count),
         likes_count: Number(data.likes_count),
         comments_count: Number(data.comments_count || 0)
-    }));
+    };
 }
 
 function checkUrlChange() {

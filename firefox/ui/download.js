@@ -2,6 +2,7 @@ const website = 'https://www.artstation.com/';
 const websiteProjectUrl = website + 'projects/';
 const websiteUserUrl = website + 'users/';
 const downloadApi = createApiClient({ credentials: 'include' });
+const getProjectJson = createProjectJsonFetcher(() => downloadApi, () => cacheAccount);
 const token = window.location.hash.slice(1);
 const activeDownloads = new Map();
 let images = [];
@@ -10,6 +11,7 @@ let cancelled = false;
 let queueStopped = false;
 let finished = false;
 let parentOrigin = '*';
+let cacheAccount = false;
 let completedCount = 0;
 let failedCount = 0;
 let preparationFailures = 0;
@@ -34,6 +36,7 @@ async function startDownload() {
             throw new Error(data?.error || 'Unable to identify the artist. Reopen the download dialog.');
         }
         parentOrigin = data.parentOrigin;
+        cacheAccount = data.cacheAccount;
         const username = encodeURIComponent(data.username);
         const result = await getJson(websiteUserUrl + username + '/projects.json?per_page=1',
             data => data && isApiCount(data.total_count));
@@ -135,7 +138,7 @@ async function loadAllPages(username, pages, fullname) {
 }
 
 async function saveImages(item, fullname) {
-    const project = await getJson(websiteProjectUrl + encodeURIComponent(item.hash_id) + '.json',
+    const project = await getProjectJson(websiteProjectUrl + encodeURIComponent(item.hash_id) + '.json',
         data => data && Array.isArray(data.assets) && data.assets.every(asset => asset
             && typeof asset.asset_type === 'string'
             && (asset.asset_type !== 'image' || (typeof asset.image_url === 'string' && asset.image_url.length > 0))));

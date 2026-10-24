@@ -148,3 +148,54 @@ function createApiClient({ concurrency = 4, timeout = 15000, retries = 2, creden
         }
     };
 }
+
+function createProjectJsonFetcher(getClient, getAccount) {
+    return async function getProjectJson(url, validate) {
+        const client = getClient();
+        const account = getAccount();
+        if (client.signal.aborted) throw new DOMException('Request cancelled', 'AbortError');
+        const match = /^https:\/\/www\.artstation\.com\/projects\/([a-zA-Z0-9]{1,64})\.json$/.exec(url);
+        if (!match || typeof account !== 'string') return client.getJson(url, validate);
+        const identity = { account: account.toLowerCase(), hash: match[1] };
+        let cacheAvailable = false;
+        try {
+            const result = await chrome.runtime.sendMessage({ message: 'getProjectCache', ...identity });
+            if (!result || result.error) throw new Error(result?.error || 'Project cache did not respond.');
+            cacheAvailable = true;
+            if (client.signal.aborted) throw new DOMException('Request cancelled', 'AbortError');
+            if (getAccount() === account && result.data && (!validate || validate(result.data))) return result.data;
+        } catch (error) {
+            if (client.signal.aborted) throw new DOMException('Request cancelled', 'AbortError');
+            console.warn('Project cache:', error);
+        }
+
+        const data = await client.getJson(url, validate);
+        const timestamp = Date.now();
+        const cachedData = selectProjectCacheData(data);
+        if (cacheAvailable && cachedData && !client.signal.aborted && getAccount() === account) {
+            try {
+                const result = await chrome.runtime.sendMessage({
+                    message: 'setProjectCache', ...identity, data: cachedData, timestamp: timestamp
+                });
+                if (!result || result.error) throw new Error(result?.error || 'Project cache did not respond.');
+            } catch (error) {
+                console.warn('Project cache:', error);
+            }
+        }
+        if (client.signal.aborted) throw new DOMException('Request cancelled', 'AbortError');
+        return data;
+    };
+}
+
+function selectProjectCacheData(data) {
+    if (!data || !isApiCount(data.id) || !isApiCount(data.views_count) || !isApiCount(data.likes_count)
+        || (data.comments_count != null && !isApiCount(data.comments_count))
+        || !Array.isArray(data.assets) || !data.assets.every(asset => asset && typeof asset.asset_type === 'string'
+            && (asset.asset_type !== 'image' || (typeof asset.image_url === 'string' && asset.image_url)))) return;
+    return {
+        id: Number(data.id), views_count: Number(data.views_count), likes_count: Number(data.likes_count),
+        comments_count: Number(data.comments_count || 0),
+        assets: data.assets.filter(asset => asset.asset_type === 'image')
+            .map(asset => ({ asset_type: 'image', image_url: asset.image_url }))
+    };
+}
