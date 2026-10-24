@@ -30,7 +30,7 @@ function createApiClient({ concurrency = 4, timeout = 15000, retries = 2, creden
             const timer = setTimeout(() => {
                 controller.signal.removeEventListener('abort', onAbort);
                 resolve();
-            }, delay);
+            }, Math.min(delay, 2147483647));
             controller.signal.addEventListener('abort', onAbort, { once: true });
         });
     }

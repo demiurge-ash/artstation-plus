@@ -25,7 +25,7 @@ let options = {
 };
 let statViews = 0;
 let statLikes = 0;
-let statFollowers = 0;
+let statFollowers;
 let statComments = 0;
 let statsKey;
 let pageVersion = 0;
@@ -189,6 +189,7 @@ function createStatistics() {
     stats.appendChild(followersEl);
     const followers = document.createElement('span');
     followers.classList.add('statistics-followers');
+    followers.textContent = 'Followers loading...';
     followersEl.appendChild(followers);
 
     header.appendChild(stats);
@@ -200,7 +201,11 @@ function createStatistics() {
 
 function loadUserInfo() {
     const username = getUsername();
-    if (!username) return;
+    if (!username) {
+        const followersEl = document.querySelector('.statistics-followers');
+        if (followersEl) followersEl.textContent = 'Followers unavailable.';
+        return;
+    }
     const version = pageVersion;
 
     getJson(websiteUserUrl + username + '.json', data => data && isApiCount(data.followers_count),
@@ -215,7 +220,11 @@ function loadUserInfo() {
             statisticsDirty = true;
             finishPageUpdate();
         }).catch(reason => {
-            if (reason.name !== 'AbortError') console.log(reason);
+            if (version === pageVersion && reason.name !== 'AbortError') {
+                const followersEl = document.querySelector('.statistics-followers');
+                if (followersEl) followersEl.textContent = 'Followers unavailable.';
+                console.log(reason);
+            }
         });;
 }
 
@@ -236,7 +245,10 @@ function showStatistics() {
     const snapshot = [statViews, statLikes, statFollowers, statComments];
     document.querySelectorAll('.art-plus-statistics .stat-diff').forEach(element => element.remove());
 
-    chrome.storage.local.get('stats', function(result) {
+    const username = getUsername();
+    if (!username || statFollowers === undefined) return;
+    const storageKey = 'stats_' + username.toLowerCase();
+    chrome.storage.local.get(storageKey, function(result) {
         const error = chrome.runtime.lastError;
         const current = [statViews, statLikes, statFollowers, statComments];
         if (version !== pageVersion || !projectsLoaded || statisticsDirty
@@ -245,7 +257,7 @@ function showStatistics() {
             console.error(error.message);
             return;
         }
-        const statsData = result.stats || {};
+        const statsData = result[storageKey] || {};
 
         let previousKey = null;
         let previousStats = null;
@@ -324,8 +336,8 @@ function showStatistics() {
         };
 
         chrome.storage.local.set({
-            stats: cachedStats
-        });
+            [storageKey]: cachedStats
+        }).catch(error => console.error(error));
 
     });
 
@@ -654,6 +666,15 @@ function finishPageUpdate() {
     if (!pageInfo || pageInfo.name !== 'myprojects' || activeProjects > 0 || projectQueue.size > 0 || pruneQueued) return;
     projectsLoaded = (projectStates.size > 0 || hasLoadedProjects)
         && [...projectStates.values()].every(state => state.data && state.rendered && !state.failed);
+    if (!projectsLoaded) {
+        const failedCount = [...projectStates.values()].filter(state => state.failed).length;
+        const views = document.querySelector('.statistics-views');
+        if (views) views.textContent = failedCount ? 'Stats unavailable: ' + failedCount + ' project(s) failed.'
+            : projectStates.size === 0 ? 'No projects loaded.' : 'Stats loading...';
+        document.querySelectorAll('.statistics-likes, .statistics-comments').forEach(element => element.textContent = '');
+        document.querySelectorAll('.art-plus-statistics .stat-diff').forEach(element => element.remove());
+        return;
+    }
     if (!projectsLoaded || !statisticsDirty) return;
     hasLoadedProjects = true;
     uniqueIds = [];
@@ -690,7 +711,7 @@ function cleanupPage() {
     trend = [];
     statViews = 0;
     statLikes = 0;
-    statFollowers = 0;
+    statFollowers = undefined;
     statComments = 0;
     statsKey = undefined;
 

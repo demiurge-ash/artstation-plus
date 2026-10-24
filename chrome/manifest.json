@@ -3,6 +3,7 @@
   "version": "4.0.0",
   "description": "Adding new features to Artstation",
   "manifest_version": 3,
+  "minimum_chrome_version": "99",
   "icons": {
     "72": "icons/icon-72.png",
     "128": "icons/icon-128.png"

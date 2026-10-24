@@ -214,6 +214,7 @@ function kFormatter(num) {
 function sortElementsByAttribute(attributeName, direction = "asc") {
     const ascending = direction === "asc";
     const parentElement = document.querySelector('#projects-list');
+    if (!parentElement) return;
     const elements = Array.from(parentElement.querySelectorAll('.project'));
 
     const sortedElements = [...elements].sort((a, b) => {
@@ -248,7 +249,7 @@ function getHash(project, name) {
                 ?.getAttribute("href");
             break;
     }
-    return link ? link.split(/[#?]/)[0].replace('/edit', '').split('/').pop() : undefined;
+    return link ? link.split(/[#?]/)[0].replace(/\/+$/, '').replace(/\/edit$/, '').split('/').pop() : undefined;
 }
 
 function isProjectInfo(data) {
@@ -259,7 +260,7 @@ function isProjectInfo(data) {
 async function getProjectInfo(hash) {
     if (!hash) return;
 
-    return getJson(websiteProjectUrl + hash + '.json', isProjectInfo, data => ({
+    return getJson(websiteProjectUrl + encodeURIComponent(hash) + '.json', isProjectInfo, data => ({
         id: Number(data.id),
         views_count: Number(data.views_count),
         likes_count: Number(data.likes_count),
