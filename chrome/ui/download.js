@@ -254,9 +254,9 @@ function finishDownloads() {
     const showBtn = document.querySelector('.show-folder');
     if (firstDownloadId !== undefined) {
         showBtn.classList.remove('none');
-        showBtn.onclick = () => {
+        showBtn.onclick = async () => {
             try {
-                chrome.downloads.show(firstDownloadId);
+                await chrome.downloads.show(firstDownloadId);
             } catch (error) {
                 recordFailure('Open Folder', error);
             }
@@ -303,7 +303,7 @@ function cleanName(name, fallback = '') {
     let clean = String(name ?? '')
         .replace(/[\u0000-\u001f/\\?%*:|"<>]/g, '-')
         .trim()
-        .replace(/[. ]+$/g, '');
+        .replace(/^[. ]+|[. ]+$/g, '');
 
     if (!clean && fallback) return cleanName(fallback);
 

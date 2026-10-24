@@ -86,7 +86,7 @@ function download() {
 
             const dialog = createDialog('/ui/download.html#' + token);
             const onMessage = function (event) {
-                if (event.origin === 'chrome-extension://' + chrome.runtime.id
+                if (event.origin === chrome.runtime.getURL('').replace(/\/$/, '')
                     && event.data?.message === 'closeModal' && event.data.token === token) {
                     closeDownloadDialog();
                 }
