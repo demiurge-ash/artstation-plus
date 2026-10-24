@@ -4,14 +4,12 @@
 
 Browser extension to add new features to Artstation!
 
-- New Ratio parameter has been added to the preview list, which displays the ratio of likes to views. 
-Each preview now shows the number of views and likes. 
-- Dropdown list has been added to the «Manage Portfolio» page for your Artstation artworks. 
-This dropdown list allows you to sort your portfolio by date, views, likes, and ratios.
-- «Download all images» button on each user profiles
-- Add to preview info about the place in the trends
-- Legacy Preview design — disable slow animation of title on previews. You can switch to modern design in the extension settings.
-- General Statistics of Views and Likes
+**Version 4**
+- Optimized extension performance, reducing browser load and memory usage.
+- Improved project data loading speed.
+- Made image downloads more reliable.
+- Fixed issues with portfolio statistics.
+- Improved compatibility with Chrome and Firefox.
 
 ## Chromium
 **[Download extension in Chrome Web Store](https://chrome.google.com/webstore/detail/artstation-plus/ebdenohdcbolldkofcepdbjdibghkndc)**
