@@ -1,6 +1,6 @@
 {
   "name": "Artstation Plus",
-  "version": "3.8.1",
+  "version": "4.0.0",
   "description": "Adding new features to Artstation",
   "manifest_version": 3,
   "icons": {
@@ -41,7 +41,7 @@
   "content_scripts": [
     {
       "matches": ["*://*.artstation.com/*"],
-      "js": ["js/functions.js", "js/content.js"],
+      "js": ["js/api.js", "js/functions.js", "js/content.js"],
       "run_at": "document_idle"
     }
   ],

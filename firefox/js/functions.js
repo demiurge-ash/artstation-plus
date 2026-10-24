@@ -89,12 +89,13 @@ function insertIcon(block, element, icon, size) {
 
 function createDownloadButton() {
     let alreadyButton = document.querySelector('.'+downloadButton);
-    if (alreadyButton) return alreadyButton;
+    if (alreadyButton) return false;
 
     const panel = document.querySelector('.user-buttons');
     if (!panel) return false;
 
     let li = document.createElement('div');
+    li.classList.add('art-plus-download-container');
     li.style.marginTop = '16px';
     let button = document.createElement('button');
     button.classList.add('btn', 'btn-warning', 'w-100', downloadButton);
@@ -144,7 +145,7 @@ function createDialog(url) {
 
     iframe.onload = function() {
         setTimeout(function() {
-            iframe.contentWindow.focus();
+            if (iframe.isConnected) iframe.contentWindow.focus();
         }, 100);
     };
 
@@ -213,6 +214,7 @@ function kFormatter(num) {
 function sortElementsByAttribute(attributeName, direction = "asc") {
     const ascending = direction === "asc";
     const parentElement = document.querySelector('#projects-list');
+    if (!parentElement) return;
     const elements = Array.from(parentElement.querySelectorAll('.project'));
 
     const sortedElements = [...elements].sort((a, b) => {
@@ -237,43 +239,42 @@ function getHash(project, name) {
     switch (name) {
         case "myprojects":
             link = project.querySelector('.project-link')
-                .getAttribute("href");
+                ?.getAttribute("href");
             break;
         case "artwork":
             link = path;
             break;
         default:
             link = project.querySelector('a')
-                .getAttribute("href")
-                .split(/[#?]/)[0];
+                ?.getAttribute("href");
             break;
     }
-    return link.replace('/edit', '').split('/').pop();
+    return link ? link.split(/[#?]/)[0].replace(/\/+$/, '').replace(/\/edit$/, '').split('/').pop() : undefined;
+}
+
+function isProjectInfo(data) {
+    return data && isApiCount(data.id) && isApiCount(data.views_count) && isApiCount(data.likes_count)
+        && (data.comments_count == null || isApiCount(data.comments_count));
 }
 
 async function getProjectInfo(hash) {
     if (!hash) return;
 
-    let data = cache.get(hash);
-    if (data) return data;
-
-    let response = await fetch(websiteProjectUrl + hash + '.json', {})
-        .then(response => response.json())
-        .then(data => {
-            return data;
-        }).catch(reason => {
-            console.log(reason);
-        });
-    cache.set(hash, response);
-    return response;
+    return getJson(websiteProjectUrl + encodeURIComponent(hash) + '.json', isProjectInfo, data => ({
+        id: Number(data.id),
+        views_count: Number(data.views_count),
+        likes_count: Number(data.likes_count),
+        comments_count: Number(data.comments_count || 0)
+    }));
 }
 
 function checkUrlChange() {
-    if (!path) return;
-    if (path !== window.location.pathname) {
-        if (handleID) clearInterval(handleID);
+    if (!path) return false;
+    if (path !== window.location.pathname || pathQuery !== window.location.search) {
         init();
+        return true;
     }
+    return false;
 }
 
 function setPath() {
@@ -289,13 +290,17 @@ function injectsCSS() {
 }
 
 function loadTrendingPages() {
+    const version = pageVersion;
     const promises = [];
     const pages = 3;
     const perPage = 100;
 
     for (let i = 1; i <= pages; i++) {
-        const promise = getJson(website + 'api/v2/community/explore/projects/trending.json?dimension=all&per_page=' + perPage + '&page=' + i)
+        const promise = getJson(website + 'api/v2/community/explore/projects/trending.json?dimension=all&per_page=' + perPage + '&page=' + i,
+            data => data && Array.isArray(data.data) && data.data.every(item => item && isApiCount(item.id)),
+            data => ({ data: data.data.map(item => ({ id: Number(item.id) })) }))
             .then(function(page) {
+                if (version !== pageVersion) return;
                 const pageData = page.data;
                 let place = 1;
                 const itemPromises = pageData.map(function(item) {
@@ -311,17 +316,17 @@ function loadTrendingPages() {
 }
 
 function createCachedJsonFetcher(cacheDuration = 3 * 60 * 1000) { // 3 minutes
-    return async function getJson(url) {
+    return async function getJson(url, validate, select = data => data) {
         const cacheKey = `cached_json_${url}`;
         const cachedData = cache.get(cacheKey);
+        const validCache = cachedData && cachedData.data && (!validate || validate(cachedData.data));
 
-        if (cachedData && cachedData.timestamp && (Date.now() - cachedData.timestamp) < cacheDuration) {
+        if (validCache && cachedData.timestamp && (Date.now() - cachedData.timestamp) < cacheDuration) {
             return cachedData.data;
         }
 
         try {
-            const response = await fetch(url, {});
-            const data = await response.json();
+            const data = select(await api.getJson(url, validate));
 
             cache.set(cacheKey, {
                 data: data,
@@ -331,7 +336,7 @@ function createCachedJsonFetcher(cacheDuration = 3 * 60 * 1000) { // 3 minutes
             return data;
 
         } catch (error) {
-            if (cachedData) {
+            if (validCache && Date.now() - cachedData.timestamp < 15 * 60 * 1000 && isRetryableApiError(error)) {
                 return cachedData.data;
             }
             throw error;
@@ -350,8 +355,12 @@ function createCachedJsonFetcher(cacheDuration = 3 * 60 * 1000) { // 3 minutes
 }*/
 
 function getOption(option) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         chrome.storage.local.get(option, (data) => {
+            if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+                return;
+            }
             const setting = data[option] !== undefined ? data[option] : options[option];
             resolve(setting);
         });
@@ -395,18 +404,45 @@ function getUsername() {
 // -----------------------------------------------------------------------------------------
 // Cache
 // -----------------------------------------------------------------------------------------
-class SessionCache extends Map {
+class MemoryCache {
+    constructor() {
+        this.entries = new Map();
+        this.bytes = 0;
+    }
+
     set(id, value) {
-        if (typeof value === 'object') value = JSON.stringify(value);
-        sessionStorage.setItem(id, value);
+        const now = Date.now();
+        for (const [key, entry] of this.entries) {
+            if (entry.expiresAt <= now) this.delete(key);
+        }
+        this.delete(id);
+
+        const size = (id.length + JSON.stringify(value).length) * 2;
+        if (size > 1024 * 1024) return;
+
+        while (this.entries.size >= 500 || this.bytes + size > 1024 * 1024) {
+            this.delete(this.entries.keys().next().value);
+        }
+        this.entries.set(id, { value: value, size: size, expiresAt: now + 15 * 60 * 1000 });
+        this.bytes += size;
     }
 
     get(id) {
-        const value = sessionStorage.getItem(id);
-        try {
-            return JSON.parse(value);
-        } catch (e) {
-            return value;
+        const entry = this.entries.get(id);
+        if (!entry) return;
+        if (entry.expiresAt <= Date.now()) {
+            this.delete(id);
+            return;
         }
+        this.entries.delete(id);
+        this.entries.set(id, entry);
+        return entry.value;
+    }
+
+    delete(id) {
+        const entry = this.entries.get(id);
+        if (!entry) return;
+        this.bytes -= entry.size;
+        this.entries.delete(id);
     }
 }

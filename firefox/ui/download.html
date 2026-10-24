@@ -29,6 +29,8 @@
         <i>Images not found!</i>
     </div>
 
+    <div id="error" class="none" role="alert"></div>
+
     <div id="total" class="none">
         Total size: <span id="total-count">0</span>.
     </div>
@@ -37,14 +39,25 @@
         Download to folder «<span id="username" style="font-weight: bold;"></span>».
     </div>
 
-    <div id="progress"></div>
+    <div id="download-status" class="none" role="status"></div>
+
+    <div id="progress" role="progressbar" aria-label="Downloaded images" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
 
     <div id="done" class="none">
-        Well done! <a class="show-folder">Open Folder</a>
+        <span id="done-message">Well done!</span> <a class="show-folder none">Open Folder</a>
     </div>
+
+    <button id="cancel" type="button">Cancel</button>
+
+    <details id="failures" class="none">
+        <summary>Errors</summary>
+        <ul id="failure-list"></ul>
+        <div id="failure-limit" class="none">Showing the first 20 errors.</div>
+    </details>
 
 </div>
 
+<script src="/js/api.js"></script>
 <script src="download.js"></script>
 </body>
 </html>

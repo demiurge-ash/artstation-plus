@@ -1,206 +1,333 @@
 const website = 'https://www.artstation.com/';
 const websiteProjectUrl = website + 'projects/';
 const websiteUserUrl = website + 'users/';
-let images;
+const downloadApi = createApiClient({ credentials: 'include' });
+const token = window.location.hash.slice(1);
+const activeDownloads = new Map();
+let images = [];
 let closeDialog = false;
+let cancelled = false;
+let queueStopped = false;
+let finished = false;
+let parentOrigin = '*';
+let completedCount = 0;
+let failedCount = 0;
+let preparationFailures = 0;
+let totalImages = 0;
+let totalSize = 0;
+let unknownSizes = 0;
+let firstDownloadId;
+let downloadStatusID;
+let checkingDownloads = false;
+let downloadStatusFailures = 0;
 
-chrome.storage.local.get('userdata', function (items) {
-    download(items.userdata);
-});
+closeButton();
+document.getElementById('cancel').onclick = cancelDownloads;
+startDownload();
 
-async function download(data) {
-    images = [];
+async function startDownload() {
+    try {
+        const data = await downloadRequest('getDownloadData');
+        if (closeDialog) return;
+        if (cancelled) return finishDownloads();
+        if (!data || data.error || typeof data.username !== 'string' || !data.username) {
+            throw new Error(data?.error || 'Unable to identify the artist. Reopen the download dialog.');
+        }
+        parentOrigin = data.parentOrigin;
+        const username = encodeURIComponent(data.username);
+        const result = await getJson(websiteUserUrl + username + '/projects.json?per_page=1',
+            data => data && isApiCount(data.total_count));
+        const fullname = cleanName(data.fullname, data.username);
+        document.getElementById('username').textContent = fullname;
 
-    closeButton();
+        await loadAllPages(username, Math.ceil(Number(result.total_count) / 50), fullname);
+        if (closeDialog) return;
+        if (cancelled) return finishDownloads();
+        stopSpin();
+        document.getElementById('search').classList.add('none');
+        totalImages = images.length;
 
-    getJson(websiteUserUrl + data.username + '/projects.json?per_page=1')
-        .then(async function (result) {
-            const per_page = 50;
-            const totalCount = result.total_count;
-            const pages = Math.ceil(totalCount / per_page);
-            const fullname = cleanName(data.fullname, data.username);
+        if (totalImages === 0) {
+            document.getElementById('found-nothing').classList.remove('none');
+            return finishDownloads();
+        }
 
-            await loadAllPages(data, pages, fullname);
+        document.getElementById('total-count').textContent = nFormatter(totalSize)
+            + (unknownSizes ? ' (some sizes unknown)' : '');
+        document.getElementById('total').classList.remove('none');
+        document.getElementById('download').classList.remove('none');
+        updateProgress();
 
-            stopSpin();
-
-            let totalImages = images.length;
-
-            if (totalImages > 0) {
-
-                const totalEl = document.getElementById('total');
-                totalEl.classList.remove('none');
-
-                const foundEl = document.getElementById('download');
-                foundEl.classList.remove('none');
-
-                const folderEl = document.getElementById('username');
-                folderEl.textContent = fullname;
-
-                const progressEl = document.getElementById('progress');
-                let completedCount = 0;
-                let firstDownloadId;
-
-                calculateTotalSize();
-
-                for (const image of images) {
+        let nextImage = 0;
+        async function consume() {
+            while (!cancelled && !closeDialog && !queueStopped && nextImage < images.length) {
+                const index = nextImage++;
+                const image = images[index];
+                images[index] = null;
+                try {
+                    const result = await downloadFile(image);
                     if (closeDialog) return;
-
-                    console.log('downloaded: ' + image.filename);
-
-                    delete image.filesize;
-                    image.conflictAction = 'overwrite';
-                    image.saveAs = false;
-                    image.message = "downloadFile";
-
-                    const downloadId = await chrome.runtime.sendMessage(image);
-                    if (firstDownloadId === undefined) firstDownloadId = downloadId;
-
-                    completedCount++;
-                    const progress = (completedCount / totalImages) * 100;
-                    progressEl.style.width = progress + '%';
-
-                    await sleep(200);
-
-                    if (completedCount === totalImages) {
-                        const doneEl = document.getElementById('done');
-                        doneEl.classList.remove('none');
-                        const showBtn = document.querySelector('.show-folder');
-
-                        showBtn.onclick = function () {
-                            chrome.runtime.sendMessage({
-                                message: 'openFolder',
-                                downloadId: firstDownloadId
-                            });
-                        }
+                    if (result.state === 'complete') {
+                        completedCount++;
+                        if (firstDownloadId === undefined) firstDownloadId = result.id;
+                    } else if (!cancelled) {
+                        failedCount++;
+                        recordFailure(image.filename, new Error(result.error || 'Download interrupted.'));
+                    }
+                } catch (error) {
+                    if (closeDialog) return;
+                    if (!cancelled) {
+                        failedCount++;
+                        recordFailure(image.filename, error);
                     }
                 }
-            } else {
-                const foundEl = document.getElementById('found-nothing');
-                foundEl.classList.remove('none');
+                updateProgress();
+                if ((completedCount + failedCount) % 25 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
             }
-        });
+        }
+        await Promise.all(Array.from({ length: Math.min(3, totalImages) }, consume));
+        if (!closeDialog) finishDownloads();
+    } catch (error) {
+        downloadApi.abort();
+        if (!closeDialog) {
+            if (cancelled) finishDownloads();
+            else showDownloadError(error);
+        }
+    } finally {
+        images = [];
+        clearTimeout(downloadStatusID);
+        downloadStatusID = undefined;
+    }
 }
 
-function loadAllPages(data, pages, fullname) {
-    const promises = [];
+async function loadAllPages(username, pages, fullname) {
+    for (let pageIndex = 1; pageIndex <= pages; pageIndex++) {
+        if (cancelled || closeDialog) return;
+        let page;
+        try {
+            page = await getJson(websiteUserUrl + username + '/projects.json?per_page=50&page=' + pageIndex,
+                data => data && Array.isArray(data.data)
+                    && data.data.every(item => item && typeof item.hash_id === 'string' && item.hash_id.length > 0));
+        } catch (error) {
+            if (error.name === 'AbortError') throw error;
+            preparationFailures++;
+            recordFailure('Page ' + pageIndex, error);
+            continue;
+        }
 
-    for (let i = 1; i <= pages; i++) {
-        const promise = getJson(websiteUserUrl + data.username + '/projects.json?page=' + i)
-            .then(function(page) {
-                const pageData = page.data;
-                const itemPromises = pageData.map(function(item) {
-                    return saveImages(item, fullname);
-                });
-                return Promise.all(itemPromises);
-            });
-        promises.push(promise);
+        let nextProject = 0;
+        async function prepare() {
+            while (!cancelled && !closeDialog && nextProject < page.data.length) {
+                const item = page.data[nextProject++];
+                try {
+                    await saveImages(item, fullname);
+                } catch (error) {
+                    if (error.name === 'AbortError') throw error;
+                    preparationFailures++;
+                    recordFailure(item.title || item.hash_id, error);
+                }
+            }
+        }
+        await Promise.all(Array.from({ length: Math.min(3, page.data.length) }, prepare));
     }
-
-    return Promise.all(promises);
 }
 
 async function saveImages(item, fullname) {
-    return new Promise(async (resolve, reject) => {
+    const project = await getJson(websiteProjectUrl + encodeURIComponent(item.hash_id) + '.json',
+        data => data && Array.isArray(data.assets) && data.assets.every(asset => asset
+            && typeof asset.asset_type === 'string'
+            && (asset.asset_type !== 'image' || (typeof asset.image_url === 'string' && asset.image_url.length > 0))));
+    let iteration = 0;
+
+    for (const asset of project.assets) {
+        if (cancelled || closeDialog) return;
+        if (asset.asset_type !== 'image') continue;
+        const positionName = iteration++;
         try {
-            const project = await getJson(websiteProjectUrl + item.hash_id + '.json');
-            let iteration = 0;
-
-            const processedAssets = project.assets
-                .filter(asset => asset.asset_type === 'image');
-
-            for (const asset of processedAssets) {
-                if (closeDialog) return;
-
-                let positionName;
-                if (iteration > 0) positionName = iteration;
-                iteration++;
-
-                const image = asset.image_url;
-                const fileName = fullname
-                    + '/'
-                    + fullname
-                    + ' - '
-                    + cleanName(item.title)
-                    + ' - '
-                    + (positionName ? positionName + ' - ' : '')
-                    + item.hash_id
-                    + '.'
-                    + getFileExtension(image);
-
-                let filesize = await getFileSize(image);
-
-                const imageData = {
-                    url: image,
-                    filename: fileName,
-                    filesize: filesize,
-                };
-
-                await updateFoundCount();
-                await sleep(100);
-
-                images.push(imageData);
+            const url = new URL(asset.image_url);
+            if (!['https:', 'http:'].includes(url.protocol)
+                || !(url.hostname === 'artstation.com' || url.hostname.endsWith('.artstation.com'))) {
+                throw new Error('Invalid image URL.');
             }
-
-            resolve();
+            const filename = fullname + '/' + fullname + ' - ' + cleanName(item.title) + ' - '
+                + (positionName ? positionName + ' - ' : '') + cleanName(item.hash_id) + '.' + getFileExtension(url);
+            const filesize = await getFileSize(url.href);
+            if (cancelled || closeDialog) return;
+            images.push({ url: url.href, filename: filename });
+            totalSize += filesize;
+            if (!filesize) unknownSizes++;
+            document.getElementById('found-count').textContent = images.length.toString();
+            document.getElementById('found').classList.remove('none');
         } catch (error) {
-            reject(error);
+            if (error.name === 'AbortError') throw error;
+            preparationFailures++;
+            recordFailure(item.title || item.hash_id, error);
         }
+    }
+}
+
+async function downloadFile(image) {
+    const response = await downloadRequest('downloadFile', {
+        url: image.url,
+        filename: image.filename
+    });
+    const id = response.downloadId;
+    if (!Number.isInteger(id)) throw new Error('Unable to start the download.');
+    if (closeDialog && !cancelled) return { id: id, state: 'in_progress' };
+
+    return new Promise(resolve => {
+        activeDownloads.set(id, resolve);
+        if (downloadStatusID === undefined && !checkingDownloads) {
+            downloadStatusID = setTimeout(checkDownloadStates, 0);
+        }
+        if (cancelled) cancelDownload(id);
     });
 }
 
-function calculateTotalSize() {
-    let totalSize = 0;
-    for (const image of images) {
-        const totalCountEl = document.getElementById('total-count');
-        totalSize += image.filesize;
-        totalCountEl.textContent = nFormatter(totalSize).toString();
+async function checkDownloadStates() {
+    downloadStatusID = undefined;
+    if (closeDialog || !activeDownloads.size) return;
+    checkingDownloads = true;
+    const ids = Array.from(activeDownloads.keys());
+    try {
+        const response = await downloadRequest('getDownloadStates', { ids: ids });
+        if (closeDialog) return;
+        if (!Array.isArray(response.downloads) || response.downloads.length !== ids.length
+            || ids.some(id => !response.downloads.some(item => item && item.id === id))
+            || response.downloads.some(item => !['in_progress', 'complete', 'interrupted', 'unavailable'].includes(item.state))) {
+            throw new Error('Invalid download status response.');
+        }
+        downloadStatusFailures = 0;
+        for (const item of response.downloads) {
+            if (item.state === 'unavailable') await failDownloadTracking(item.id, new Error(item.error));
+            else settleDownload(item.id, item.state, item.error);
+        }
+    } catch (error) {
+        // Retry short-lived messaging failures without starting files again.
+        if (++downloadStatusFailures >= 3) {
+            for (const id of ids) await failDownloadTracking(id, error);
+        }
+    } finally {
+        checkingDownloads = false;
+        if (!closeDialog && activeDownloads.size) downloadStatusID = setTimeout(checkDownloadStates, 500);
     }
 }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+async function failDownloadTracking(id, error) {
+    if (closeDialog || !activeDownloads.has(id)) return;
+    try {
+        const result = await downloadRequest('cancelDownload', { downloadId: id });
+        if (result.download?.state === 'complete') {
+            settleDownload(id, 'complete');
+            return;
+        }
+    } catch (cancelError) {
+        queueStopped = true;
+        error = new Error('Unable to track or cancel the download. Queue stopped. ' + cancelError.message);
+    }
+    settleDownload(id, 'interrupted', error.message);
+}
+
+function settleDownload(id, state, error) {
+    if (state !== 'complete' && state !== 'interrupted') return;
+    const resolve = activeDownloads.get(id);
+    if (!resolve) return;
+    activeDownloads.delete(id);
+    resolve({ id: id, state: state, error: error });
+}
+
+async function cancelDownloads() {
+    if (cancelled || finished) return;
+    cancelled = true;
+    downloadApi.abort();
+    document.getElementById('cancel').disabled = true;
+    await Promise.all(Array.from(activeDownloads.keys(), cancelDownload));
+}
+
+async function cancelDownload(id) {
+    try {
+        const result = await downloadRequest('cancelDownload', { downloadId: id });
+        if (!activeDownloads.has(id)) return;
+        settleDownload(id, result.download?.state === 'complete' ? 'complete' : 'interrupted', 'Cancelled.');
+    } catch (error) {
+        if (!closeDialog) recordFailure('Cancel download ' + id, error);
+        settleDownload(id, 'interrupted', error.message);
+    }
+}
+
+function updateProgress() {
+    document.getElementById('download-status').classList.remove('none');
+    document.getElementById('download-status').textContent = 'Downloaded: ' + completedCount + ' / ' + totalImages
+        + (failedCount ? '. Failed: ' + failedCount : '');
+    const progress = totalImages ? completedCount / totalImages * 100 : 0;
+    document.getElementById('progress').style.width = progress + '%';
+    document.getElementById('progress').setAttribute('aria-valuenow', Math.round(progress));
+}
+
+function finishDownloads() {
+    finished = true;
+    stopSpin();
+    document.getElementById('search').classList.add('none');
+    document.getElementById('cancel').classList.add('none');
+    if (!cancelled && !totalImages && !preparationFailures) return;
+    document.getElementById('done-message').textContent = cancelled ? 'Cancelled.'
+        : failedCount || preparationFailures ? 'Finished with errors.' : 'Well done!';
+    document.getElementById('done').classList.remove('none');
+    const showBtn = document.querySelector('.show-folder');
+    if (firstDownloadId !== undefined) {
+        showBtn.classList.remove('none');
+        showBtn.onclick = async () => {
+            try {
+                await downloadRequest('openFolder', { downloadId: firstDownloadId });
+            } catch (error) {
+                recordFailure('Open Folder', error);
+            }
+        };
+    }
+}
+
+function recordFailure(label, error) {
+    const list = document.getElementById('failure-list');
+    document.getElementById('failures').classList.remove('none');
+    if (list.childElementCount < 20) {
+        const entry = document.createElement('li');
+        entry.textContent = label + ': ' + error.message;
+        list.appendChild(entry);
+    } else {
+        document.getElementById('failure-limit').classList.remove('none');
+    }
 }
 
 function stopSpin() {
-    const spinEl = document.getElementById('found-spin');
-    spinEl.classList.remove('art-plus-icon-spin');
+    document.getElementById('found-spin').classList.remove('art-plus-icon-spin');
 }
 
-function updateFoundCount() {
-    const foundCountEl = document.getElementById('found-count');
-    let foundCount = parseInt(foundCountEl.textContent);
-    if (foundCount === 0) {
-        const foundEl = document.getElementById('found');
-        foundEl.classList.remove('none');
-    }
-    foundCount++;
-    foundCountEl.textContent = foundCount.toString();
-
-    return Promise.resolve();
+function showDownloadError(error) {
+    finished = true;
+    console.error(error);
+    stopSpin();
+    document.getElementById('search').classList.add('none');
+    document.getElementById('done').classList.add('none');
+    document.getElementById('cancel').classList.add('none');
+    const errorEl = document.getElementById('error');
+    errorEl.textContent = 'Unable to complete the operation. ' + error.message;
+    errorEl.classList.remove('none');
 }
 
 function getFileSize(url) {
-    return fetch(url, {})
-        .then(function(response) {
-            const contentLength = response.headers.get('Content-Length');
-            if (contentLength !== null) {
-                return parseInt(contentLength, 10);
-            } else {
-                return 0;
-            }
-        })
-        .catch(function(error) {
-            return 0;
-            console.log(error);
-        });
+    return downloadApi.getFileSize(url).catch(error => {
+        if (error.name === 'AbortError') throw error;
+        return 0;
+    });
 }
 
 function cleanName(name, fallback = '') {
     let clean = String(name ?? '')
         .replace(/[\u0000-\u001f/\\?%*:|"<>]/g, '-')
         .trim()
-        .replace(/[. ]+$/g, '');
+        .replace(/^[. ]+|[. ]+$/g, '');
 
     if (!clean && fallback) return cleanName(fallback);
 
@@ -212,35 +339,40 @@ function cleanName(name, fallback = '') {
 }
 
 function getFileExtension(url) {
-    return url.split('.').pop().split(/[#?]/)[0];
+    const extension = url.pathname.split('.').pop().toLowerCase();
+    return /^(jpe?g|png|gif|webp|avif|bmp|tiff?|svg)$/.test(extension) ? extension : 'jpg';
 }
 
-function getJson(url) {
-    return fetch(url, {})
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(data) {
-            return data;
-        });
+function getJson(url, validate) {
+    return downloadApi.getJson(url, validate);
+}
+
+async function downloadRequest(message, data = {}) {
+    const response = await chrome.runtime.sendMessage({ ...data, message: message, token: token });
+    if (!response || response.error) throw new Error(response?.error || 'The download service did not respond.');
+    return response;
 }
 
 function closeButton() {
-    const showBtn = document.getElementById('close');
-    showBtn.onclick = function() {
-        closeDialogEvent();
-    }
-
-    document.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape') {
-            closeDialogEvent();
-        }
+    document.getElementById('close').onclick = closeDialogEvent;
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeDialogEvent();
     });
+    window.addEventListener('pagehide', stopQueue);
+}
+
+function stopQueue() {
+    closeDialog = true;
+    downloadApi.abort();
+    clearTimeout(downloadStatusID);
+    downloadStatusID = undefined;
+    for (const id of activeDownloads.keys()) settleDownload(id, 'interrupted', 'Dialog closed.');
+    images = [];
 }
 
 function closeDialogEvent() {
-    closeDialog = true;
-    window.parent.postMessage('closeModal', '*');
+    stopQueue();
+    window.parent.postMessage({ message: 'closeModal', token: token }, parentOrigin);
 }
 
 function nFormatter(num) {

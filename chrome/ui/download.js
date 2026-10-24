@@ -17,6 +17,9 @@ let totalImages = 0;
 let totalSize = 0;
 let unknownSizes = 0;
 let firstDownloadId;
+let downloadStatusID;
+let checkingDownloads = false;
+let downloadStatusFailures = 0;
 
 closeButton();
 document.getElementById('cancel').onclick = cancelDownloads;
@@ -24,7 +27,7 @@ startDownload();
 
 async function startDownload() {
     try {
-        const data = await chrome.runtime.sendMessage({ message: 'getDownloadData', token: token });
+        const data = await downloadRequest('getDownloadData');
         if (closeDialog) return;
         if (cancelled) return finishDownloads();
         if (!data || data.error || typeof data.username !== 'string' || !data.username) {
@@ -54,8 +57,6 @@ async function startDownload() {
         document.getElementById('total').classList.remove('none');
         document.getElementById('download').classList.remove('none');
         updateProgress();
-        chrome.downloads.onChanged.addListener(onDownloadChanged);
-        chrome.downloads.onErased.addListener(onDownloadErased);
 
         let nextImage = 0;
         async function consume() {
@@ -96,8 +97,8 @@ async function startDownload() {
         }
     } finally {
         images = [];
-        chrome.downloads.onChanged.removeListener(onDownloadChanged);
-        chrome.downloads.onErased.removeListener(onDownloadErased);
+        clearTimeout(downloadStatusID);
+        downloadStatusID = undefined;
     }
 }
 
@@ -168,33 +169,65 @@ async function saveImages(item, fullname) {
 }
 
 async function downloadFile(image) {
-    const id = await chrome.downloads.download({
+    const response = await downloadRequest('downloadFile', {
         url: image.url,
-        filename: image.filename,
-        conflictAction: 'overwrite',
-        saveAs: false
+        filename: image.filename
     });
+    const id = response.downloadId;
     if (!Number.isInteger(id)) throw new Error('Unable to start the download.');
     if (closeDialog && !cancelled) return { id: id, state: 'in_progress' };
 
     return new Promise(resolve => {
         activeDownloads.set(id, resolve);
-        // A small file may finish before download() returns its ID.
-        chrome.downloads.search({ id: id }).then(items => {
-            if (!items.length) settleDownload(id, 'interrupted', 'Download removed from history.');
-            else settleDownload(id, items[0].state, items[0].error);
-        }).catch(async error => {
-            if (closeDialog || !activeDownloads.has(id)) return;
-            try {
-                await chrome.downloads.cancel(id);
-            } catch (cancelError) {
-                queueStopped = true;
-                error = new Error('Unable to track or cancel the download. Queue stopped. ' + cancelError.message);
-            }
-            settleDownload(id, 'interrupted', error.message);
-        });
+        if (downloadStatusID === undefined && !checkingDownloads) {
+            downloadStatusID = setTimeout(checkDownloadStates, 0);
+        }
         if (cancelled) cancelDownload(id);
     });
+}
+
+async function checkDownloadStates() {
+    downloadStatusID = undefined;
+    if (closeDialog || !activeDownloads.size) return;
+    checkingDownloads = true;
+    const ids = Array.from(activeDownloads.keys());
+    try {
+        const response = await downloadRequest('getDownloadStates', { ids: ids });
+        if (closeDialog) return;
+        if (!Array.isArray(response.downloads) || response.downloads.length !== ids.length
+            || ids.some(id => !response.downloads.some(item => item && item.id === id))
+            || response.downloads.some(item => !['in_progress', 'complete', 'interrupted', 'unavailable'].includes(item.state))) {
+            throw new Error('Invalid download status response.');
+        }
+        downloadStatusFailures = 0;
+        for (const item of response.downloads) {
+            if (item.state === 'unavailable') await failDownloadTracking(item.id, new Error(item.error));
+            else settleDownload(item.id, item.state, item.error);
+        }
+    } catch (error) {
+        // Retry short-lived messaging failures without starting files again.
+        if (++downloadStatusFailures >= 3) {
+            for (const id of ids) await failDownloadTracking(id, error);
+        }
+    } finally {
+        checkingDownloads = false;
+        if (!closeDialog && activeDownloads.size) downloadStatusID = setTimeout(checkDownloadStates, 500);
+    }
+}
+
+async function failDownloadTracking(id, error) {
+    if (closeDialog || !activeDownloads.has(id)) return;
+    try {
+        const result = await downloadRequest('cancelDownload', { downloadId: id });
+        if (result.download?.state === 'complete') {
+            settleDownload(id, 'complete');
+            return;
+        }
+    } catch (cancelError) {
+        queueStopped = true;
+        error = new Error('Unable to track or cancel the download. Queue stopped. ' + cancelError.message);
+    }
+    settleDownload(id, 'interrupted', error.message);
 }
 
 function settleDownload(id, state, error) {
@@ -203,14 +236,6 @@ function settleDownload(id, state, error) {
     if (!resolve) return;
     activeDownloads.delete(id);
     resolve({ id: id, state: state, error: error });
-}
-
-function onDownloadChanged(delta) {
-    settleDownload(delta.id, delta.state?.current || (delta.error?.current ? 'interrupted' : undefined), delta.error?.current);
-}
-
-function onDownloadErased(id) {
-    settleDownload(id, 'interrupted', 'Download removed from history.');
 }
 
 async function cancelDownloads() {
@@ -223,10 +248,9 @@ async function cancelDownloads() {
 
 async function cancelDownload(id) {
     try {
-        await chrome.downloads.cancel(id);
+        const result = await downloadRequest('cancelDownload', { downloadId: id });
         if (!activeDownloads.has(id)) return;
-        const items = await chrome.downloads.search({ id: id });
-        settleDownload(id, items[0]?.state === 'complete' ? 'complete' : 'interrupted', 'Cancelled.');
+        settleDownload(id, result.download?.state === 'complete' ? 'complete' : 'interrupted', 'Cancelled.');
     } catch (error) {
         if (!closeDialog) recordFailure('Cancel download ' + id, error);
         settleDownload(id, 'interrupted', error.message);
@@ -256,7 +280,7 @@ function finishDownloads() {
         showBtn.classList.remove('none');
         showBtn.onclick = async () => {
             try {
-                await chrome.downloads.show(firstDownloadId);
+                await downloadRequest('openFolder', { downloadId: firstDownloadId });
             } catch (error) {
                 recordFailure('Open Folder', error);
             }
@@ -323,6 +347,12 @@ function getJson(url, validate) {
     return downloadApi.getJson(url, validate);
 }
 
+async function downloadRequest(message, data = {}) {
+    const response = await chrome.runtime.sendMessage({ ...data, message: message, token: token });
+    if (!response || response.error) throw new Error(response?.error || 'The download service did not respond.');
+    return response;
+}
+
 function closeButton() {
     document.getElementById('close').onclick = closeDialogEvent;
     document.addEventListener('keydown', event => {
@@ -334,8 +364,8 @@ function closeButton() {
 function stopQueue() {
     closeDialog = true;
     downloadApi.abort();
-    chrome.downloads.onChanged.removeListener(onDownloadChanged);
-    chrome.downloads.onErased.removeListener(onDownloadErased);
+    clearTimeout(downloadStatusID);
+    downloadStatusID = undefined;
     for (const id of activeDownloads.keys()) settleDownload(id, 'interrupted', 'Dialog closed.');
     images = [];
 }
