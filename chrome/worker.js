@@ -8,29 +8,17 @@
  ******************************************************************************/
 
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
-
-    // Save File to folder
-    if (message.message && message.message === 'downloadFile') {
-        delete message.message;
-        try {
-            chrome.downloads.download(message, function (downloadId) {
-                const error = chrome.runtime.lastError;
-                sendResponse(error ? { error: error.message } : { downloadId: downloadId });
-            });
-        } catch (error) {
-            sendResponse({ error: error.message });
-        }
-
-        return true;
-
-    // Open Download Folder
-    } else if (message.message && message.message === 'openFolder') {
-        try {
-            chrome.downloads.show(message.downloadId);
-            sendResponse({});
-        } catch (error) {
-            sendResponse({ error: error.message });
-        }
+    if (message?.message !== 'getDownloadData') return;
+    if (sender.id !== chrome.runtime.id || !Number.isInteger(sender.tab?.id)
+        || typeof message.token !== 'string' || !/^[\da-f-]{36}$/i.test(message.token)
+        || sender.url !== chrome.runtime.getURL('ui/download.html') + '#' + message.token) {
+        sendResponse({ error: 'Invalid download dialog.' });
+        return;
     }
 
+    // Ask only the content script in the tab that opened this dialog.
+    chrome.tabs.sendMessage(sender.tab.id, message, { frameId: 0 })
+        .then(data => sendResponse(data || { error: 'The download dialog has expired. Reopen it.' }),
+            error => sendResponse({ error: error.message }));
+    return true;
 });

@@ -62,3 +62,10 @@ h3, .h3 {
     text-decoration: underline;
     cursor: pointer;
 }
+.close-hint {
+    font-size: 12px;
+}
+#failure-list {
+    overflow-wrap: anywhere;
+    padding-left: 20px;
+}

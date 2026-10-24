@@ -259,12 +259,12 @@ function isProjectInfo(data) {
 async function getProjectInfo(hash) {
     if (!hash) return;
 
-    let data = cache.get(hash);
-    if (isProjectInfo(data)) return data;
-
-    const response = await api.getJson(websiteProjectUrl + hash + '.json', isProjectInfo);
-    cache.set(hash, response);
-    return response;
+    return getJson(websiteProjectUrl + hash + '.json', isProjectInfo, data => ({
+        id: Number(data.id),
+        views_count: Number(data.views_count),
+        likes_count: Number(data.likes_count),
+        comments_count: Number(data.comments_count || 0)
+    }));
 }
 
 function checkUrlChange() {
@@ -296,7 +296,8 @@ function loadTrendingPages() {
 
     for (let i = 1; i <= pages; i++) {
         const promise = getJson(website + 'api/v2/community/explore/projects/trending.json?dimension=all&per_page=' + perPage + '&page=' + i,
-            data => data && Array.isArray(data.data) && data.data.every(item => item && isApiCount(item.id)))
+            data => data && Array.isArray(data.data) && data.data.every(item => item && isApiCount(item.id)),
+            data => ({ data: data.data.map(item => ({ id: Number(item.id) })) }))
             .then(function(page) {
                 if (version !== pageVersion) return;
                 const pageData = page.data;
@@ -314,7 +315,7 @@ function loadTrendingPages() {
 }
 
 function createCachedJsonFetcher(cacheDuration = 3 * 60 * 1000) { // 3 minutes
-    return async function getJson(url, validate) {
+    return async function getJson(url, validate, select = data => data) {
         const cacheKey = `cached_json_${url}`;
         const cachedData = cache.get(cacheKey);
         const validCache = cachedData && cachedData.data && (!validate || validate(cachedData.data));
@@ -324,7 +325,7 @@ function createCachedJsonFetcher(cacheDuration = 3 * 60 * 1000) { // 3 minutes
         }
 
         try {
-            const data = await api.getJson(url, validate);
+            const data = select(await api.getJson(url, validate));
 
             cache.set(cacheKey, {
                 data: data,
@@ -334,7 +335,7 @@ function createCachedJsonFetcher(cacheDuration = 3 * 60 * 1000) { // 3 minutes
             return data;
 
         } catch (error) {
-            if (validCache && isRetryableApiError(error)) {
+            if (validCache && Date.now() - cachedData.timestamp < 15 * 60 * 1000 && isRetryableApiError(error)) {
                 return cachedData.data;
             }
             throw error;
@@ -402,18 +403,45 @@ function getUsername() {
 // -----------------------------------------------------------------------------------------
 // Cache
 // -----------------------------------------------------------------------------------------
-class SessionCache extends Map {
+class MemoryCache {
+    constructor() {
+        this.entries = new Map();
+        this.bytes = 0;
+    }
+
     set(id, value) {
-        if (typeof value === 'object') value = JSON.stringify(value);
-        sessionStorage.setItem(id, value);
+        const now = Date.now();
+        for (const [key, entry] of this.entries) {
+            if (entry.expiresAt <= now) this.delete(key);
+        }
+        this.delete(id);
+
+        const size = (id.length + JSON.stringify(value).length) * 2;
+        if (size > 1024 * 1024) return;
+
+        while (this.entries.size >= 500 || this.bytes + size > 1024 * 1024) {
+            this.delete(this.entries.keys().next().value);
+        }
+        this.entries.set(id, { value: value, size: size, expiresAt: now + 15 * 60 * 1000 });
+        this.bytes += size;
     }
 
     get(id) {
-        const value = sessionStorage.getItem(id);
-        try {
-            return JSON.parse(value);
-        } catch (e) {
-            return value;
+        const entry = this.entries.get(id);
+        if (!entry) return;
+        if (entry.expiresAt <= Date.now()) {
+            this.delete(id);
+            return;
         }
+        this.entries.delete(id);
+        this.entries.set(id, entry);
+        return entry.value;
+    }
+
+    delete(id) {
+        const entry = this.entries.get(id);
+        if (!entry) return;
+        this.bytes -= entry.size;
+        this.entries.delete(id);
     }
 }

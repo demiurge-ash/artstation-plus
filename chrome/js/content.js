@@ -7,7 +7,7 @@
 
  ******************************************************************************/
 
-const cache = new SessionCache();
+const cache = new MemoryCache();
 const getJson = createCachedJsonFetcher();
 const artBlock = 'art-plus-icons';
 const downloadButton = 'art-plus-download-button';
@@ -64,30 +64,36 @@ function download() {
     let button = createDownloadButton();
     if (!button) return;
 
-    button.addEventListener('click', async () => {
+    button.addEventListener('click', () => {
         if (button.disabled) return;
         button.disabled = true;
-        const version = pageVersion;
+        let onRequest;
 
         try {
+            const token = crypto.randomUUID();
             const username = path.split('/')[1];
             const title = document.querySelector('meta[property="og:title"]');
-            await chrome.storage.local.set({
-                userdata: {
+            onRequest = function (message, sender, sendResponse) {
+                if (sender.id !== chrome.runtime.id || message?.message !== 'getDownloadData' || message.token !== token) return;
+                chrome.runtime.onMessage.removeListener(onRequest);
+                sendResponse({
+                    username: username,
                     fullname: title ? title.getAttribute('content') : username,
-                    username: username
-                }
-            });
-            if (version !== pageVersion) return;
+                    parentOrigin: window.location.origin
+                });
+            };
+            chrome.runtime.onMessage.addListener(onRequest);
 
-            const dialog = createDialog('/ui/download.html');
+            const dialog = createDialog('/ui/download.html#' + token);
             const onMessage = function (event) {
-                if (event.origin === 'chrome-extension://' + chrome.runtime.id && event.data === 'closeModal') {
+                if (event.origin === 'chrome-extension://' + chrome.runtime.id
+                    && event.data?.message === 'closeModal' && event.data.token === token) {
                     closeDownloadDialog();
                 }
             };
 
             closeDownloadDialog = function () {
+                chrome.runtime.onMessage.removeListener(onRequest);
                 window.removeEventListener('message', onMessage);
                 dialog.close();
                 dialog.remove();
@@ -96,6 +102,7 @@ function download() {
             };
             window.addEventListener('message', onMessage);
         } catch (error) {
+            if (onRequest) chrome.runtime.onMessage.removeListener(onRequest);
             button.disabled = false;
             console.error(error);
         }
@@ -196,7 +203,8 @@ function loadUserInfo() {
     if (!username) return;
     const version = pageVersion;
 
-    getJson(websiteUserUrl + username + '.json', data => data && isApiCount(data.followers_count))
+    getJson(websiteUserUrl + username + '.json', data => data && isApiCount(data.followers_count),
+        data => ({ followers_count: Number(data.followers_count) }))
         .then(function (result) {
             if (version !== pageVersion) return;
             const followers = result.followers_count;
