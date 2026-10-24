@@ -17,9 +17,6 @@ const websiteUserUrl = website + 'users/';
 let uniqueIds = [];
 let path;
 let pathQuery;
-let handleID;
-let handleUnidentifiedPageID;
-let handleStatus = false;
 let statsID;
 let projectsLoaded = false;
 let trend = [];
@@ -32,13 +29,35 @@ let statFollowers = 0;
 let statComments = 0;
 let statsKey;
 let pageVersion = 0;
-let pendingProjects = new WeakSet();
-let failedProjects = new WeakSet();
 let api;
 let closeDownloadDialog;
+let pageInfo;
+let pageObserver;
+let pageUpdateID;
+let pageUIQueued = false;
+let pruneQueued = false;
+let activeProjects = 0;
+let statisticsDirty = false;
+let hasLoadedProjects = false;
+const projectObservers = new Map();
+const projectStates = new Map();
+const projectQueue = new Set();
+const projectInfoSelector = '.art-plus-icons-list, .art-plus-wrapper, .art-plus-label-crosshairs, .art-plus-label-trend';
+const pageUISelector = '.page-title, .portfolio-content-select, .user-buttons';
+const extensionSelector = projectInfoSelector + ', .art-plus-statistics, .art-plus-sort, .art-plus-download-container, .art-plus-modal';
+const projectMutationSelector = extensionSelector + ', .art-plus-overlay, .art-plus-overlay-icons';
 
 injectsCSS();
-setInterval(checkUrlChange, 1000);
+if (window.navigation) {
+    window.navigation.addEventListener('currententrychange', checkUrlChange);
+} else {
+    setInterval(checkUrlChange, 1000);
+}
+window.addEventListener('popstate', checkUrlChange);
+window.addEventListener('pagehide', cleanupPage);
+window.addEventListener('pageshow', event => {
+    if (event.persisted) init();
+});
 init();
 
 function download() {
@@ -83,37 +102,6 @@ function download() {
     });
 }
 
-function userPage() {
-    if (handleID) return;
-
-    let userProjects = document.querySelectorAll('user-projects');
-    let visibleUserProject;
-    let userProjectsArray = Array.from(userProjects);
-
-    userProjectsArray.forEach((element) => {
-        let styles = window.getComputedStyle(element);
-
-        let display = styles.getPropertyValue("display");
-        let visibility = styles.getPropertyValue("visibility");
-
-        if (display !== "none" && visibility !== "hidden") {
-            visibleUserProject = element;
-        }
-    });
-
-    if (visibleUserProject) {
-        visibleUserProject.classList.add('visible-gallery');
-        const info = {
-            name: "main",
-            container: ".gallery-grid",
-            item: "projects-list-item",
-            legacyDesignPreview: ".gallery-grid-overlay",
-            legacyDesignIcon: ".gallery-grid-icons"
-        }
-        handleID = setInterval(handle, 1000, info);
-    }
-}
-
 function InfoBlockArtwork(data, div) {
     const viewsCount = data.views_count;
     const likesCount = data.likes_count;
@@ -138,21 +126,6 @@ function InfoBlockArtwork(data, div) {
         label.textContent = ' Ratio';
         metaBlock.appendChild(label);
     }
-
-    if (data.id in trend) {
-        let metaBlockTrend = document.createElement('div');
-        metaBlockTrend.classList.add('d-flex', 'align-items-center', artBlock, 'art-plus-label-trend');
-        if (!div.querySelector('.art-plus-label-trend')) {
-            wrapper.appendChild(metaBlockTrend);
-            const trendNode = createTrendEl(trend[data.id]);
-            insertIcon(metaBlockTrend, trendNode, 'trend', 'lg');
-
-            let label = document.createElement('span');
-            label.classList.add('art-plus-label-text');
-            label.textContent = ' Rank';
-            metaBlockTrend.appendChild(label);
-        }
-    }
 }
 
 function InfoBlockMain(data, div) {
@@ -166,10 +139,6 @@ function InfoBlockMain(data, div) {
     createGalleryIcon(ul, 'eye', kFormatter(viewsCount));
     createGalleryIcon(ul, 'thumbs-up', kFormatter(likesCount));
     createGalleryIcon(ul, 'crosshairs', ratioEl);
-    if (data.id in trend) {
-        const trendNode = createTrendEl(trend[data.id]);
-        createGalleryIcon(ul, 'trend', trendNode);
-    }
     anchorDiv.appendChild(ul);
 }
 
@@ -218,7 +187,8 @@ function createStatistics() {
     header.appendChild(stats);
 
     loadUserInfo();
-    statsID = setInterval(showStatistics, 1000);
+    statisticsDirty = true;
+    finishPageUpdate();
 }
 
 function loadUserInfo() {
@@ -234,29 +204,35 @@ function loadUserInfo() {
             if (!followersEl) return;
             statFollowers = followers;
             followersEl.textContent = addSpacesToNumber(followers) + ' followers';
+            statisticsDirty = true;
+            finishPageUpdate();
         }).catch(reason => {
             if (reason.name !== 'AbortError') console.log(reason);
         });;
 }
 
 function showStatistics() {
-    if (!projectsLoaded) return;
+    statsID = undefined;
+    if (!projectsLoaded || !statisticsDirty) return;
 
     const views = document.querySelector(".statistics-views");
     const likes = document.querySelector(".statistics-likes");
     const comments = document.querySelector(".statistics-comments");
     if (!views || !likes || !comments) return;
-    if (statsID) clearInterval(statsID);
-    statsID = undefined;
+    statisticsDirty = false;
 
     views.textContent = addSpacesToNumber(statViews) + ' views';
     likes.textContent = addSpacesToNumber(statLikes) + ' likes';
     comments.textContent = addSpacesToNumber(statComments) + ' comments';
     const version = pageVersion;
+    const snapshot = [statViews, statLikes, statFollowers, statComments];
+    document.querySelectorAll('.art-plus-statistics .stat-diff').forEach(element => element.remove());
 
     chrome.storage.local.get('stats', function(result) {
         const error = chrome.runtime.lastError;
-        if (version !== pageVersion) return;
+        const current = [statViews, statLikes, statFollowers, statComments];
+        if (version !== pageVersion || !projectsLoaded || statisticsDirty
+            || snapshot.some((value, index) => value !== current[index])) return;
         if (error) {
             console.error(error.message);
             return;
@@ -397,8 +373,6 @@ function createSortSelect() {
 }
 
 function InfoBlockMyProject(data, div) {
-    updateStatistics(data);
-
     const viewsCount = data.views_count;
     const likesCount = data.likes_count;
     const ratioCount = calculateRatio(viewsCount, likesCount);
@@ -408,11 +382,6 @@ function InfoBlockMyProject(data, div) {
     metaBlock.classList.add(artBlock);
 
     insertIcon(metaBlock, ratioEl, 'crosshairs');
-
-    if (data.id in trend) {
-        const trendNode = createTrendEl(trend[data.id]);
-        insertIcon(metaBlock, trendNode, 'trend');
-    }
 
     // add attributes to preview block
     div.setAttribute('data-ratio', ratioCount);
@@ -433,6 +402,31 @@ function createInfoBlock(data, div, name) {
         default:
             InfoBlockMain(data, div);
             break;
+    }
+    createTrendInfo(data, div, name);
+}
+
+function createTrendInfo(data, div, name) {
+    if (!(data.id in trend)) return;
+    const trendNode = createTrendEl(trend[data.id]);
+
+    if (name === 'artwork') {
+        const wrapper = div.querySelector('.art-plus-wrapper');
+        if (!wrapper || div.querySelector('.art-plus-label-trend')) return;
+        const metaBlock = document.createElement('div');
+        metaBlock.classList.add('d-flex', 'align-items-center', artBlock, 'art-plus-label-trend');
+        wrapper.appendChild(metaBlock);
+        insertIcon(metaBlock, trendNode, 'trend', 'lg');
+        const label = document.createElement('span');
+        label.classList.add('art-plus-label-text');
+        label.textContent = ' Rank';
+        metaBlock.appendChild(label);
+    } else if (name === 'myprojects') {
+        const metaBlock = div.querySelector('.project-meta');
+        if (metaBlock) insertIcon(metaBlock, trendNode, 'trend');
+    } else {
+        const ul = div.querySelector('.art-plus-icons-list');
+        if (ul && !ul.querySelector('.art-plus-trend')) createGalleryIcon(ul, 'trend', trendNode);
     }
 }
 
@@ -461,83 +455,229 @@ function switchToLegacyDesign(div, info) {
     }
 }
 
-function handleUnidentifiedPage() {
-    download();
-    userPage();
+function schedulePageUpdate() {
+    if (pageUpdateID === undefined) pageUpdateID = setTimeout(flushPageUpdate, 50);
 }
 
-function handle(info) {
-    if (handleStatus) return;
-    handleStatus = true;
+function queueProject(element) {
+    if (!element || !element.isConnected || !element.matches(pageInfo.item) || !element.closest(pageInfo.container)) return;
+    projectQueue.add(element);
+    schedulePageUpdate();
+}
+
+function queueProjects(root) {
+    if (root.nodeType !== 1) return;
+    queueProject(root.closest(pageInfo.item));
+    root.querySelectorAll(pageInfo.item).forEach(queueProject);
+}
+
+function findContainers(root) {
+    if (root.nodeType !== 1) return;
+    if (root.matches(pageInfo.container)) observeContainer(root);
+    root.querySelectorAll(pageInfo.container).forEach(observeContainer);
+}
+
+function observeContainer(container) {
+    if (projectObservers.has(container)) return;
     const version = pageVersion;
-    const pending = pendingProjects;
-    const failed = failedProjects;
-
-    try {
-        if (info.name === 'myprojects') {
-            createSortSelect();
-            createStatistics();
+    const observer = new MutationObserver(records => {
+        if (version !== pageVersion || checkUrlChange()) return;
+        for (const record of records) {
+            if (record.target.closest(projectMutationSelector)) continue;
+            const added = [...record.addedNodes].filter(node => node.nodeType === 1 && !node.matches(projectMutationSelector));
+            const removed = [...record.removedNodes].filter(node => node.nodeType === 1
+                && !node.matches('.art-plus-overlay, .art-plus-overlay-icons'));
+            if (record.type !== 'attributes' && added.length === 0 && removed.length === 0) continue;
+            if (removed.some(node => node.matches(pageInfo.item) || node.querySelector(pageInfo.item))) pruneQueued = true;
+            queueProject(record.target.closest(pageInfo.item));
+            added.forEach(queueProjects);
         }
+        if (pruneQueued) schedulePageUpdate();
+    });
+    observer.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
+    projectObservers.set(container, observer);
+    queueProjects(container);
+}
 
-        let hasProjects = false;
-        let allProjectsLoaded = true;
-        const projectsLists = document.querySelectorAll(info.container);
-        projectsLists.forEach((projectsList) => {
-            const divs = projectsList.querySelectorAll(info.item);
-            divs.forEach((div) => {
-                hasProjects = true;
-                try {
-                    switchToLegacyDesign(div, info);
-                    if (div.querySelector('.' + artBlock)) return;
-                    allProjectsLoaded = false;
-                    if (pending.has(div) || failed.has(div)) return;
-
-                    const hash = getHash(div, info.name);
-                    if (!hash) return;
-                    pending.add(div);
-                    getProjectInfo(hash)
-                        .then(data => {
-                            if (version === pageVersion && div.isConnected && !div.querySelector('.' + artBlock)) {
-                                createInfoBlock(data, div, info.name);
-                            }
-                        }, reason => {
-                            if (version === pageVersion && reason.name !== 'AbortError') {
-                                failed.add(div);
-                                console.log(reason);
-                            }
-                        }).catch(reason => {
-                            if (version === pageVersion) console.error(reason);
-                        }).finally(() => {
-                            pending.delete(div);
-                        });
-                } catch (error) {
-                    allProjectsLoaded = false;
-                    console.error(error);
-                }
-            });
-        });
-        projectsLoaded = hasProjects && allProjectsLoaded;
-    } catch (error) {
-        console.error(error);
-    } finally {
-        handleStatus = false;
+function mountPageUI() {
+    if (pageInfo.name === 'myprojects') {
+        createSortSelect();
+        createStatistics();
     }
+    if (pageInfo.download) download();
+}
+
+function observePage() {
+    const version = pageVersion;
+    pageObserver = new MutationObserver(records => {
+        if (version !== pageVersion || checkUrlChange()) return;
+        for (const record of records) {
+            if (record.target.closest(extensionSelector)) continue;
+            if ([...projectObservers.keys()].some(container => container.contains(record.target))) continue;
+            const added = [...record.addedNodes].filter(node => node.nodeType === 1 && !node.matches(extensionSelector));
+            if (added.length === 0 && record.removedNodes.length === 0) continue;
+            for (const node of record.removedNodes) {
+                if (node.nodeType === 1 && [...projectObservers.keys()].some(container => node.contains(container))) pruneQueued = true;
+            }
+            for (const node of added) {
+                findContainers(node);
+                if (node.matches(pageUISelector) || node.querySelector(pageUISelector)) pageUIQueued = true;
+            }
+            if (record.target.closest(pageUISelector)) pageUIQueued = true;
+        }
+        if (pageUIQueued || pruneQueued) schedulePageUpdate();
+    });
+    const root = document.body || document.documentElement;
+    pageObserver.observe(root, { childList: true, subtree: true });
+    findContainers(root);
+    mountPageUI();
+}
+
+function releaseProject(state) {
+    if (state.pending) {
+        state.pending = false;
+        activeProjects--;
+    }
+}
+
+function flushPageUpdate() {
+    pageUpdateID = undefined;
+    if (!pageInfo || checkUrlChange()) return;
+
+    if (pruneQueued) {
+        pruneQueued = false;
+        for (const [container, observer] of projectObservers) {
+            if (!container.isConnected) {
+                observer.disconnect();
+                projectObservers.delete(container);
+            }
+        }
+        for (const [element, state] of projectStates) {
+            if (!element.isConnected || !element.closest(pageInfo.container)) {
+                releaseProject(state);
+                projectStates.delete(element);
+                statisticsDirty = true;
+            }
+        }
+    }
+    if (pageUIQueued) {
+        pageUIQueued = false;
+        mountPageUI();
+    }
+    const elements = [...projectQueue];
+    projectQueue.clear();
+    for (const element of elements) {
+        try {
+            processProject(element);
+        } catch (error) {
+            console.error(error);
+        }
+    }
+    finishPageUpdate();
+}
+
+function clearProjectInfo(element) {
+    element.querySelectorAll(projectInfoSelector).forEach(node => node.remove());
+    element.classList.remove(artBlock);
+    element.querySelectorAll('.' + artBlock).forEach(node => node.classList.remove(artBlock));
+}
+
+function renderProject(element, state) {
+    if (pageInfo.name === 'myprojects' && !element.querySelector('.project-meta')) {
+        state.rendered = false;
+        return;
+    }
+    switchToLegacyDesign(element, pageInfo);
+    const selector = pageInfo.name === 'main' ? '.art-plus-icons-list' : '.art-plus-label-crosshairs';
+    if (!element.querySelector(selector)) {
+        clearProjectInfo(element);
+        createInfoBlock(state.data, element, pageInfo.name);
+    } else {
+        createTrendInfo(state.data, element, pageInfo.name);
+    }
+    state.rendered = !!element.querySelector(selector);
+}
+
+function processProject(element) {
+    if (!element.isConnected || !element.closest(pageInfo.container)) return;
+    const hash = getHash(element, pageInfo.name);
+    let state = projectStates.get(element);
+    if (!state || state.hash !== hash) {
+        if (state) releaseProject(state);
+        clearProjectInfo(element);
+        state = { hash: hash, data: null, pending: false, failed: false, rendered: false };
+        projectStates.set(element, state);
+        projectsLoaded = false;
+        statisticsDirty = true;
+    }
+    if (!hash || state.pending || state.failed) return;
+    if (state.data) {
+        renderProject(element, state);
+        return;
+    }
+
+    const version = pageVersion;
+    const info = pageInfo;
+    const isCurrent = () => version === pageVersion && projectStates.get(element) === state
+        && element.isConnected && element.closest(info.container) && getHash(element, info.name) === hash;
+    state.pending = true;
+    activeProjects++;
+    getProjectInfo(hash)
+        .then(data => {
+            if (!isCurrent()) return;
+            state.data = data;
+            statisticsDirty = true;
+            renderProject(element, state);
+        }, error => {
+            if (isCurrent() && error.name !== 'AbortError') {
+                state.failed = true;
+                console.log(error);
+            }
+        }).catch(error => {
+            if (version === pageVersion) console.error(error);
+        }).finally(() => {
+            if (version !== pageVersion) return;
+            releaseProject(state);
+            finishPageUpdate();
+        });
+}
+
+function finishPageUpdate() {
+    if (!pageInfo || pageInfo.name !== 'myprojects' || activeProjects > 0 || projectQueue.size > 0 || pruneQueued) return;
+    projectsLoaded = (projectStates.size > 0 || hasLoadedProjects)
+        && [...projectStates.values()].every(state => state.data && state.rendered && !state.failed);
+    if (!projectsLoaded || !statisticsDirty) return;
+    hasLoadedProjects = true;
+    uniqueIds = [];
+    statViews = 0;
+    statLikes = 0;
+    statComments = 0;
+    for (const state of projectStates.values()) updateStatistics(state.data);
+    clearTimeout(statsID);
+    statsID = setTimeout(showStatistics, 50);
 }
 
 function cleanupPage() {
     pageVersion++;
+    if (pageObserver) pageObserver.disconnect();
+    pageObserver = undefined;
+    for (const observer of projectObservers.values()) observer.disconnect();
+    projectObservers.clear();
+    projectStates.clear();
+    projectQueue.clear();
     if (api) api.abort();
-    api = createApiClient();
-    clearInterval(handleID);
-    clearInterval(handleUnidentifiedPageID);
-    clearInterval(statsID);
-    handleID = undefined;
-    handleUnidentifiedPageID = undefined;
+    api = undefined;
+    clearTimeout(pageUpdateID);
+    clearTimeout(statsID);
+    pageUpdateID = undefined;
     statsID = undefined;
-    handleStatus = false;
+    pageInfo = undefined;
+    pageUIQueued = false;
+    pruneQueued = false;
+    activeProjects = 0;
+    statisticsDirty = false;
+    hasLoadedProjects = false;
     projectsLoaded = false;
-    pendingProjects = new WeakSet();
-    failedProjects = new WeakSet();
     uniqueIds = [];
     trend = [];
     statViews = 0;
@@ -547,28 +687,16 @@ function cleanupPage() {
     statsKey = undefined;
 
     if (closeDownloadDialog) closeDownloadDialog();
-    const selectors = [
-        '.art-plus-icons-list', '.art-plus-wrapper',
-        '.art-plus-label-crosshairs', '.art-plus-label-trend',
-        '.art-plus-statistics', '.art-plus-sort', '.art-plus-download-container'
-    ];
-    document.querySelectorAll(selectors.join(', ')).forEach(element => element.remove());
+    document.querySelectorAll(extensionSelector).forEach(element => element.remove());
     document.querySelectorAll('.' + artBlock).forEach(element => element.classList.remove(artBlock));
 }
 
 function init() {
     cleanupPage();
+    api = createApiClient();
     let info = false;
     setPath();
     const version = pageVersion;
-
-    getOption('legacyDesign').then((legacyDesign) => {
-        if (version !== pageVersion) return;
-        options['legacyDesign'] = legacyDesign;
-        document.body.classList.toggle('legacy-design', legacyDesign);
-    }).catch(error => {
-        console.error(error);
-    });
 
     //  Trending, Following & Latest Galleries
     //  artstation.com/?sort_by={sort}
@@ -602,12 +730,40 @@ function init() {
         }
     }
 
+    if (!info) {
+        info = {
+            name: "main",
+            container: "user-projects .gallery-grid",
+            item: "projects-list-item",
+            legacyDesignPreview: ".gallery-grid-overlay",
+            legacyDesignIcon: ".gallery-grid-icons",
+            download: true
+        };
+    }
+    pageInfo = info;
+
+    getOption('legacyDesign').catch(error => {
+        console.error(error);
+        return options['legacyDesign'];
+    }).then(legacyDesign => {
+        if (version !== pageVersion) return;
+        options['legacyDesign'] = legacyDesign;
+        document.body.classList.toggle('legacy-design', legacyDesign);
+        observePage();
+    }).catch(error => {
+        console.error(error);
+    });
+
     loadTrendingPages()
-        .then(function(result) {})
+        .then(function() {
+            if (version !== pageVersion) return;
+            for (const [element, state] of projectStates) {
+                if (element.isConnected && state.data && state.rendered && getHash(element, info.name) === state.hash) {
+                    createTrendInfo(state.data, element, info.name);
+                }
+            }
+        })
         .catch(function(error) {
             if (error.name !== 'AbortError') console.error(error);
         });
-
-    if (info) handleID = setInterval(handle, 1000, info);
-    if (!info) handleUnidentifiedPageID = setInterval(handleUnidentifiedPage, 1000);
 }

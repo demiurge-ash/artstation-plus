@@ -268,10 +268,12 @@ async function getProjectInfo(hash) {
 }
 
 function checkUrlChange() {
-    if (!path) return;
+    if (!path) return false;
     if (path !== window.location.pathname || pathQuery !== window.location.search) {
         init();
+        return true;
     }
+    return false;
 }
 
 function setPath() {
