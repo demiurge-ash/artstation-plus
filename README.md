@@ -1,7 +1,6 @@
 # <img src="https://github.com/demiurge-ash/artstation-plus/blob/master/chrome/icons/icon-128.png" height="38" width="38" style="vertical-align: middle;"> Artstation Plus
 
-![1280x800-2](https://github.com/demiurge-ash/artstation-plus/assets/40300551/a60c63a7-b33f-42fd-92cb-2603cf44f45d)
-
+![1280x800-2](https://github.com/user-attachments/assets/fbc2c9c6-3c49-4a21-9f66-a9adda4f8ff3)
 
 Browser extension to add new features to Artstation!
 
